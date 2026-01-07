@@ -1,0 +1,123 @@
+{
+	"openapi": "3.0.3",
+	"info": {
+		"title": "Blog API",
+		"version": "1.0.0",
+		"description": "API for managing blog posts with authentication"
+	},
+	"servers": [
+		{
+			"url": "http://localhost:5173/api",
+			"description": "Local development server"
+		}
+	],
+	"paths": {
+		"/blog": {
+			"get": {
+				"summary": "Get current user's blog info",
+				"description": "Requires authentication. Returns a success message if the user exists in the database, otherwise redirects.",
+				"tags": [
+					"Blog"
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"message": {
+											"type": "string",
+											"example": "Success"
+										}
+									},
+									"required": [
+										"message"
+									]
+								}
+							}
+						}
+					},
+					"303": {
+						"description": "Redirect due to missing session or user not found"
+					}
+				},
+				"security": [
+					{
+						"sessionAuth": []
+					}
+				]
+			},
+			"post": {
+				"summary": "Create or update a blog post",
+				"description": "Requires authentication. Accepts a JSON body to create or update blog data.",
+				"tags": [
+					"Blog"
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"title": {
+										"type": "string",
+										"example": "My new blog post"
+									},
+									"content": {
+										"type": "string",
+										"example": "This is the content of the blog."
+									}
+								},
+								"required": [
+									"title",
+									"content"
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Blog post successfully created/updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"message": {
+											"type": "string",
+											"example": "Success"
+										}
+									},
+									"required": [
+										"message"
+									]
+								}
+							}
+						}
+					},
+					"303": {
+						"description": "Redirect due to missing session"
+					}
+				},
+				"security": [
+					{
+						"sessionAuth": []
+					}
+				]
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"sessionAuth": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "session"
+			}
+		}
+	}
+}

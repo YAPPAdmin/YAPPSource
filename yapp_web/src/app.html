@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+
+		<script src="../node_modules/preline/dist/preline.js"></script>
+		<!-- <script src="%sveltekit.assets%/preline/preline.js"></script> -->
+
+		<!-- TipTap -->
+		<script type="module">
+			import { Editor } from 'https://esm.sh/@tiptap/core';
+			import StarterKit from 'https://esm.sh/@tiptap/starter-kit';
+		</script>
+
+		<div style="display: contents">%sveltekit.body%</div>
+	
+	</body>
+</html>
+
+
+<style>
+	body {
+		overflow-x: hidden;
+	}
+
+</style>

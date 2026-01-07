@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1920"
+   height="569.08777"
+   viewBox="0 0 1920 569.08777"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   sodipodi:docname="YAPP.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#505050"
+     bordercolor="#ffffff"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="1"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="px"
+     inkscape:zoom="0.76406816"
+     inkscape:cx="866.41485"
+     inkscape:cy="405.06857"
+     inkscape:window-width="2560"
+     inkscape:window-height="1369"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Ebene 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-209.60129)">
+    <path
+       d="M 438.59629,778.68905 H 170.49593 V 570.56114 L 0,209.60129 h 1697.2802 c 125.9519,0 222.7198,44.54398 222.7198,178.94392 0,129.79195 -97.5359,188.15993 -219.6479,188.15993 h -76.032 V 778.68905 H 438.59629"
+       id="text1-1"
+       style="font-weight:bold;font-size:192px;font-family:'Noto Sans JP';-inkscape-font-specification:'Noto Sans JP, Bold';display:inline;fill:#386641;fill-opacity:1;stroke:none;stroke-width:12;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+       aria-label="YAPP"
+       sodipodi:nodetypes="ccccsssccc"
+       inkscape:label="Test_background" />
+    <path
+       d="M 170.49593,778.68905 H 284.15987 V 570.56114 L 455.42382,209.60129 H 337.15186 l -56.83197,139.00795 c -16.12799,42.23997 -33.024,82.17596 -50.68798,125.95195 H 226.5599 C 208.89592,430.7852 193.53591,390.84921 177.40792,348.60924 L 120.57595,209.60129 H 0 L 170.49593,570.56114 Z M 629.75998,482.24117 c 16.89599,-59.13598 33.79198,-123.64795 48.38397,-185.85592 h 3.84 c 16.12799,61.43997 31.48799,126.71994 49.15199,185.85592 l 16.89599,62.20797 H 612.86398 Z M 433.15207,778.68905 H 548.35202 L 588.28799,632.76911 H 772.60792 L 812.5439,778.68905 H 931.58386 L 748.79992,209.60129 H 615.16799 Z m 565.24832,0 H 1112.0643 V 576.70514 h 76.032 c 122.112,0 219.6479,-58.36798 219.6479,-188.15993 0,-134.39994 -96.7679,-178.94392 -222.7199,-178.94392 H 998.40039 Z M 1112.0643,486.84917 V 300.22525 h 64.512 c 78.336,0 119.808,22.27199 119.808,88.31996 0,65.27997 -37.632,98.30396 -115.968,98.30396 z m 398.5919,291.83988 h 113.6639 V 576.70514 h 76.032 c 122.112,0 219.6479,-58.36798 219.6479,-188.15993 0,-134.39994 -96.7679,-178.94392 -222.7198,-178.94392 h -186.624 z M 1624.3201,486.84917 V 300.22525 h 64.5121 c 78.3359,0 119.8078,22.27199 119.8078,88.31996 0,65.27997 -37.632,98.30396 -115.9679,98.30396 z"
+       id="text1"
+       style="font-weight:bold;font-size:192px;font-family:'Noto Sans JP';-inkscape-font-specification:'Noto Sans JP, Bold';display:inline;fill:#f2e8cf;stroke-width:200;stroke-linecap:round;stroke-linejoin:bevel"
+       aria-label="YAPP" />
+  </g>
+</svg>

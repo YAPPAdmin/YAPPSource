@@ -1,0 +1,358 @@
+@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+@theme {
+    --color-primary-100: oklch(0.1795 0.0197 150.92); 
+    --color-primary-200: oklch(0.2594 0.0376 149.85); 
+    --color-primary-300: oklch(0.3313 0.0509 148.94); 
+    --color-primary-400: oklch(0.4017 0.066 148.85); 
+    --color-primary-500: oklch(0.4665 0.0784 148.94); 
+    --color-primary-600: oklch(0.6049 0.105 148.86); 
+    --color-primary-700: oklch(0.715 0.0952 149.67); 
+    --color-primary-800: oklch(0.8097 0.0633 150.6); 
+    --color-primary-900: oklch(0.9056 0.0303 151.49); 
+
+    --color-secondary-100: oklch(0.2214 0.0293 134.85); 
+    --color-secondary-200: oklch(0.335 0.0555 134.88); 
+    --color-secondary-300: oklch(0.4371 0.0758 135.05); 
+    --color-secondary-400: oklch(0.5333 0.096 134.86); 
+    --color-secondary-500: oklch(0.6312 0.1166 134.9); 
+    --color-secondary-600: oklch(0.7162 0.111 134.94); 
+    --color-secondary-700: oklch(0.7877 0.0826 134.2); 
+    --color-secondary-800: oklch(0.8586 0.0546 134.21); 
+    --color-secondary-900: oklch(0.9299 0.0267 132.98); 
+
+    --color-tertiary-100: oklch(0.2725 0.0492 123.98); 
+    --color-tertiary-200: oklch(0.4253 0.0849 123.85); 
+    --color-tertiary-300: oklch(0.5645 0.1172 124.35); 
+    --color-tertiary-400: oklch(0.6986 0.1481 124.53); 
+    --color-tertiary-500: oklch(0.7874 0.1465 123.64); 
+    --color-tertiary-600: oklch(0.8263 0.1219 122.48); 
+    --color-tertiary-700: oklch(0.8684 0.0932 122.11); 
+    --color-tertiary-800: oklch(0.9118 0.0625 121.4); 
+    --color-tertiary-900: oklch(0.9557 0.0312 120.78); 
+
+    --color-highlight-100: oklch(0.2013 0.0406 21.34); 
+    --color-highlight-200: oklch(0.2992 0.0732 22.53); 
+    --color-highlight-300: oklch(0.3907 0.1046 21.73); 
+    --color-highlight-400: oklch(0.4769 0.1315 22.38); 
+    --color-highlight-500: oklch(0.5575 0.1512 22.42); 
+    --color-highlight-600: oklch(0.6393 0.1191 19.63); 
+    --color-highlight-700: oklch(0.7266 0.0852 18.42); 
+    --color-highlight-800: oklch(0.8182 0.0546 18.33); 
+    --color-highlight-900: oklch(0.9083 0.0266 14.77); 
+
+    --color-background-100: oklch(0.3475 0.0565 88.26); 
+    --color-background-200: oklch(0.5595 0.0967 86.68); 
+    --color-background-300: oklch(0.7361 0.1233 86.98); 
+    --color-background-400: oklch(0.8334 0.0847 88.48); 
+    --color-background-500: oklch(0.9323 0.0347 88.78); 
+    --color-background-600: oklch(0.9463 0.0275 90.91); 
+    --color-background-700: oklch(0.9588 0.0208 88.72); 
+    --color-background-800: oklch(0.9735 0.0139 88.68); 
+    --color-background-900: oklch(0.9853 0.0069 88.64); 
+
+    --color-success-default: oklch(0.5998 0.1906 139.38); 
+    --color-success-light: oklch(0.7819 0.1825 126.75); 
+
+    --color-warning-default: oklch(0.8652 0.1768 90.38); 
+    --color-warning-light: oklch(0.9147 0.137 95.26); 
+
+    --color-error-default: oklch(0.556 0.1955 34.9); 
+    --color-error-light: oklch(0.7789 0.1393 46.57); 
+}
+
+
+/* Headings */
+
+h1 {
+    @apply
+    text-primary-500 text-4xl
+    my-2
+    ;
+}
+
+h2 {
+    @apply
+    text-secondary-500 text-2xl
+    my-1
+    ;
+}
+
+h3 {
+    @apply
+    text-tertiary-500 text-xl
+    my-1
+    ;
+} 
+
+h4 {
+    @apply
+    text-highlight-500 text-lg
+    ;
+} 
+
+p {
+    @apply
+    text-primary-200
+    ;
+}
+
+strong {
+    @apply
+    text-highlight-500
+    ;
+}
+
+
+
+/* Buttons */
+
+.defaultButton {
+    @apply
+    w-fit 
+    mt-4 py-3 px-4 
+    inline-flex justify-center items-center gap-x-2 
+    text-white  text-sm font-medium 
+    rounded-lg border border-transparent 
+    bg-primary-500 shadow-lg
+    hover:bg-primary-600 hover:cursor-pointer
+    focus:outline-hidden focus:bg-primary-600
+    disabled:opacity-50 disabled:hover:bg-primary-500 disabled:cursor-default
+    transition-all duration-300
+    ;
+}
+
+.defaultButtonFullWidth {
+    @apply
+    w-full 
+    mt-4 py-3 px-4 
+    inline-flex justify-center items-center gap-x-2 
+    text-white  text-sm font-medium 
+    rounded-lg border border-transparent 
+    bg-primary-500 shadow-lg
+    hover:bg-primary-600 hover:cursor-pointer
+    focus:outline-hidden focus:bg-primary-600
+    disabled:opacity-50
+    transition-all duration-300
+    ;
+}
+
+.authProviderButton {
+    @apply
+    w-full 
+    py-3 px-4 
+    inline-flex justify-center items-center gap-x-2 
+    text-gray-800 text-sm font-medium 
+    rounded-lg border border-gray-200 
+    bg-background-900 shadow-lg  
+    hover:bg-background-800 hover:cursor-pointer
+    focus:outline-hidden focus:bg-gray-50 
+    disabled:opacity-50
+    transition-all duration-300
+    ;
+}
+
+
+
+
+.alertButton {
+    @apply
+    h-fit
+    my-4 w-fit
+    py-3 px-4 
+    inline-flex items-center
+    gap-x-2 text-sm font-medium 
+    rounded-lg 
+    border border-transparent 
+    text-white
+    bg-red-500  hover:bg-red-600 
+    focus:outline-none focus:bg-red-600 
+    disabled:opacity-50 disabled:pointer-events-none
+    ;   
+}
+
+.alarmButton {
+    @apply
+    h-fit
+    my-4 w-fit
+    py-3 px-4 
+    inline-flex items-center
+    gap-x-2 text-sm font-medium 
+    rounded-lg 
+    border border-transparent 
+    text-white
+    bg-red-500  hover:bg-red-600 
+    focus:outline-none focus:bg-red-600 
+    disabled:opacity-50 disabled:pointer-events-none
+    ;
+}
+
+
+
+/* Input */
+input{
+    @apply
+    w-full 
+    py-3 px-4 
+    inline-flex justify-center items-center gap-x-2 
+    text-gray-800 text-sm font-medium 
+    rounded-lg border border-gray-200 
+    bg-white
+    hover:bg-background-800 
+    focus:outline-hidden focus:bg-background-900
+    disabled:opacity-50
+    transition-all duration-300
+    ;
+}
+
+input[type="date"] {
+    @apply
+    w-full 
+    py-3 px-4 
+    inline-flex justify-center items-center gap-x-2 
+    text-gray-800 text-sm font-medium 
+    rounded-lg border border-gray-200 
+    bg-white shadow-lg
+    hover:bg-background-800 
+    focus:outline-hidden focus:bg-background-900
+    disabled:opacity-50
+    transition-all duration-300
+    ;
+}
+
+select{
+    @apply
+    py-3 px-4 
+    inline-flex justify-center items-center gap-x-2 
+    text-gray-800 text-sm font-medium 
+    rounded-lg border border-gray-200 
+    bg-white shadow-lg
+    hover:bg-background-800 
+    focus:outline-hidden focus:bg-background-900
+    disabled:opacity-50
+    transition-all duration-300
+    ;
+}
+
+/* Input Lable */
+.inputLabel {
+    @apply
+        mb-1
+        block 
+        text-secondary-500 text-sm 
+    ;
+}
+
+
+
+/* Divider - Divider.svelte */
+.divider{
+    @apply
+    py-4 
+    flex items-center 
+    text-xs text-primary-500 
+    uppercase 
+    before:flex-1 before:border-t before:border-primary-500 before:me-6 
+    after:flex-1 after:border-t after:border-primary-500 after:ms-6
+    ;
+}
+
+
+
+
+hr {
+    @apply
+    mt-6 mb-6
+    border
+    border-primary-500
+    rounded
+    ;
+}
+
+
+
+/* TipTap Editor */
+.ProseMirror {
+    outline: none;
+}
+.ProseMirror:focus {
+    outline: none;
+}
+
+li {
+    @apply
+    w-fit h-fit
+    ;
+}
+
+
+
+
+.tape {
+  @apply bg-[repeating-linear-gradient(-45deg,#f2a417,#f2a417_15px,#141617_15px,#141617_30px)];
+}
+
+
+
+
+/* YAPP CUSTOM ELEMENTS */
+
+/* BUTTONS */
+
+.btn {
+    @apply
+    py-3 px-4 
+    inline-flex justify-center items-center 
+    gap-x-2 
+    text-sm font-medium text-white
+    rounded-lg border border-transparent 
+    hover:cursor-pointer
+    focus:outline-hidden
+    disabled:opacity-50 disabled:pointer-events-none;
+}
+
+.btn-primary {
+    @apply 
+    bg-primary-500  hover:bg-primary-700 focus:bg-primary-700 
+}
+
+.btn-secondary {
+    @apply 
+    bg-secondary-500  hover:bg-secondary-700  focus:bg-secondary-700 
+}
+
+.btn-tertiary {
+    @apply 
+    bg-tertiary-500  hover:bg-tertiary-700  focus:bg-tertiary-700 
+}
+
+.btn-highlight {
+    @apply 
+    bg-highlight-500  hover:bg-highlight-700 focus:bg-highlight-700 
+}
+
+.btn-background {
+    @apply 
+    bg-background-500 hover:bg-background-700 focus:bg-background-700 
+}
+
+
+.DEVbutton {
+    @apply 
+    px-4 py-2 rounded-lg border border-dashed border-cyan-500 
+    text-cyan-500 font-semibold uppercase tracking-wide
+    bg-cyan-50 hover:bg-cyan-100 hover:text-cyan-600
+    transition-all duration-200 shadow-sm
+    before:content-['DEV'] before:text-[10px] before:bg-cyan-500 
+    before:text-white before:px-2 before:py-[1px] before:rounded before:mr-2
+    flex items-center
+    hover:cursor-pointer
+    disabled:cursor-not-allowed disabled:opacity-50
+    ;
+}
