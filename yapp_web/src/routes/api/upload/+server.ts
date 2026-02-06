@@ -1,31 +1,54 @@
 import { dev } from "$app/environment";
+import { loadExifData, type FileWrapper } from "$lib/uploads/upload";
 import { UserService } from "$lib/utils/auth/UserService";
+import { Logger } from "$lib/utils/logger";
 import { Uploads } from "$lib/utils/uploads";
 import type { RequestHandler } from "@sveltejs/kit";
+import { v4 as uuidv4 } from 'uuid';
+import sharp from "sharp";
+import exifReader from "exif-reader";
+import path from "path";
 
 export const GET: RequestHandler = async (event) => {
-    // Get Session
-    const session = await event.locals.auth(event);
-    const dbUser = await UserService.readUser("email", session?.user?.email)
-
-    if (!session?.user || !dbUser) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403 });
-    }
-
     try {
+        const getType = event.url.searchParams.get("getType") || "getReg";
+        const fileId = event.url.searchParams.get("fileId") || "";
+        const fileName = event.url.searchParams.get("fileName") || "";
+        const fileSource = event.url.searchParams.get("fileSource") || "";
 
-        const id = event.url.searchParams.get("id");
-        const fileName = event.url.searchParams.get("fileName");
-        const source = event.url.searchParams.get("source");
+        let result: any;
 
-        const result = await Uploads.getFile(id, fileName, source)
+        console.log("PING GET")
 
-        if (result.length === 0) {
-            return new Response(JSON.stringify({ error: "No files found" }), { status: 404 });
+        if(getType == "getReg") {
+            result = await Uploads.getFileFromRegistry(fileId, fileName, fileSource);
+
+            if(!result.length) {
+                return new Response(JSON.stringify({ error: "No image found"}), { status: 404 })
+            }
+
+            return new Response(JSON.stringify({ result: result }), { status: 200 });
+
+        } else if(getType == "getImg") {
+            result = await Uploads.getFileFromStorage(fileId);
+
+            if(!result.success || !result.stream) {
+                return new Response(JSON.stringify({ error: "Image not found" }), { status: 404 })
+            }
+
+            console.log(`PING GET ${result.success} - ${result.stream}`)
+
+            return new Response(result.stream, {
+                headers: {
+                    "Content-Type": result.contentType,
+                    "Cache-Control": "public, max-age=86400" // Cache 24h                   
+                }
+            })
+
+        } else {
+            return new Response(JSON.stringify({ error: "Invalid Search Param"}), { status: 400 })
         }
 
-        return new Response(JSON.stringify({ files: result }), { status: 200 });
-        
     } catch(error) {
         if(dev) console.error("Error getting file", error);
         return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
@@ -43,32 +66,79 @@ export const POST: RequestHandler = async (event) => {
 
     try {
         const form = await event.request.formData();
-        const file = form.get("file") as File | null;
+        const file = form.get("file") as File | undefined;
+        const name = form.get("name") as string | undefined;
+        const description = form.get("description") as string | "";
+        const source = form.get("source") as string | "";
+        const online = form.get("online") as string | "";
+        
+        if(!name) return new Response(JSON.stringify({error: "No name found"}), { status: 400 })
 
-        if(!file) {
-            return new Response(JSON.stringify({error: "No file found"}), { status: 400 });
+        let wrapper: FileWrapper = {
+            id: uuidv4().replace(/-/g, ""),
+            name: name,
+            description: description,
+            source: source,
+            file: file,
+            online: online,
+            uploadTime: new Date(),
+            size: file?.size || 0,
+            metadata: {
+                width :0,
+                height :0,
+                camera :"",
+                iso :"",
+                dateTaken :"",
+            },
         }
 
-        // Validate type
-        if(!file.type.startsWith("image/")) {
-            return new Response(JSON.stringify({error: "Invalid Filetype"}), { status: 400 });
+        console.log("UPLOAD SIZE: ", file?.size)
+
+        let buffer: Buffer;
+        let extension: string = "";
+
+        if(online && online != "false") {
+            const response = await fetch(online);
+            if(!response.ok) throw new Error("Could not fetch remote image");
+        
+            const arrayBuffer = await response.arrayBuffer();
+            buffer = Buffer.from(arrayBuffer);
+
+            const contentType = response.headers.get("content-type");
+            extension = contentType?.split("/")[1] || "jpg";
+        } 
+
+        else if(file && file.size > 0) {
+            buffer = Buffer.from(await file.arrayBuffer());
+            extension = file.name.split(".").pop() || "jpg";
+        } 
+
+        else {
+            return new Response(JSON.stringify({ error: "No image source found" }), { status: 400 });
         }
 
-        const MAX = 18 * 1024 * 1024;
-        if(file.size > MAX) {
-            return new Response(JSON.stringify({error: "File to large"}), { status: 400 });
+        wrapper.ext = extension;
+        const image = sharp(buffer);
+        const metadata = await image.metadata();
+
+        wrapper.metadata!.width = metadata?.width || 0;
+        wrapper.metadata!.height = metadata?.height || 0;
+
+        if(metadata.exif) {
+            try {
+                const parsedExif = exifReader(metadata.exif);
+                const make = parsedExif.Image?.Make || "";
+                const model = parsedExif.Image?.Model || "";
+                
+                wrapper.metadata!.camera = `${make} ${model}`.trim() || "";
+                wrapper.metadata!.iso = parsedExif.Photo?.ISO ? String(parsedExif.Photo.ISO) : "";
+                wrapper.metadata!.dateTaken = parsedExif.Photo?.DateTimeOriginal ? parsedExif.Photo.DateTimeOriginal.toISOString() : "";
+            } catch (error) {
+                console.warn("Could not parse EXIF buffer:", error);
+            }
         }
 
-        // Extract Metadata
-        const name = (form.get("name") as string)?.trim();
-        const description = (form.get("description") as string)?.trim();
-        const source = (form.get("source")as string)?.trim();
-
-        const size = file.size;
-        const lastModified = file.lastModified; 
-
-        const result = await Uploads.saveFileUpload(file, dbUser.getId(), name, description, source)
-
+        const result = await Uploads.saveFile(wrapper, dbUser.getId())
         return new Response(JSON.stringify(result), { status: 201 })
 
     } catch(error) {
@@ -87,40 +157,28 @@ export const PUT: RequestHandler = async (event) => {
     }
 
     try {
-
         const id = event.url.searchParams.get("id");
+        const name = event.url.searchParams.get("name") || undefined;
+        const description = event.url.searchParams.get("description") || undefined;
+        const source = event.url.searchParams.get("source") || undefined;
 
         if (!id) {
             return new Response(JSON.stringify({ error: "Missing file id" }), { status: 400 });
         }
 
-        // Accept JSON updates
-        const body = await event.request.json().catch(() => null);
-
-        if (!body || typeof body !== "object") {
-            return new Response(JSON.stringify({ error: "Invalid or missing JSON body" }), { status: 400 });
+        if(!name && !description && !source) {
+            return new Response(JSON.stringify({ error: "No changes" }), { status: 400 });
         }
 
-        // Allowed update fields
-        const allowedFields = ["name", "description", "source", "fileUrl"];
-        const updates: Record<string, any> = {};
+        const result = await Uploads.updateFile(id, dbUser.getId(), name, description, source);
 
-        for (const key of allowedFields) {
-            if (body[key] !== undefined) updates[key] = body[key];
-        }
+        console.log("RESULT: ", result)
 
-        if (Object.keys(updates).length === 0) {
-            return new Response(JSON.stringify({ error: "No valid fields to update" }), { status: 400 });
-        }
-
-        // Perform update
-        const result = await Uploads.updateFile(id, {...updates});
-
-        if (!result.success) {
+        if (!result || !result.success) {
             return new Response(JSON.stringify({ error: "Update failed" }), { status: 500 });
         }
 
-        return new Response(JSON.stringify({ updated: result.updated }), { status: 200 });
+        return new Response(JSON.stringify({ updated: result.changes }), { status: 200 });
 
 
     } catch(error) {
@@ -139,16 +197,20 @@ export const DELETE: RequestHandler = async (event) => {
     }
 
     try{
+        const fileId = event.url.searchParams.get("fileId");
 
-        const id = event.url.searchParams.get("id");
-
-        if(!id) {
-            return new Response(JSON.stringify({ error: "No files found" }), { status: 404 });
+        if (!fileId) {
+            return new Response(JSON.stringify({ error: "No image found" }), { status: 404 });
         }
 
-        const result = await Uploads.deleteFile(id);
+        const result = await Uploads.deleteFile(fileId);
 
-        return new Response(JSON.stringify({ delete: result }), { status: 200})
+        if(!result.success) {
+            Logger.info("[API][DELETE FILE]", "Deleted File", { fileId: fileId }, { id: dbUser.getId()} )
+            return new Response(JSON.stringify({ error: result.error || "Delete failed"}), { status: 404 });
+        }
+
+        return new Response(JSON.stringify({ message: "File deleted successfully" }), { status: 200 });
 
     } catch(error) {
         if(dev) console.error("Error deleting file", error);

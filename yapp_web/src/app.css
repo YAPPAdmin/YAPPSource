@@ -219,7 +219,6 @@ input[type="date"] {
     text-gray-800 text-sm font-medium 
     rounded-lg border border-gray-200 
     bg-white shadow-lg
-    hover:bg-background-800 
     focus:outline-hidden focus:bg-background-900
     disabled:opacity-50
     transition-all duration-300
@@ -304,6 +303,12 @@ li {
 /* YAPP CUSTOM ELEMENTS */
 
 /* BUTTONS */
+
+button {
+    @apply
+    hover:cursor-pointer
+    ;
+}
 
 .btn {
     @apply

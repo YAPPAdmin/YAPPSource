@@ -1,291 +1,309 @@
 import { SurrealDB } from "$lib/database/newSurrealDB";
 import { dev } from "$app/environment";
 import { Logger } from "$lib/utils/logger";
-import fs from "node:fs";
-import path from "node:path";
-import { v4 as uuidv4 } from 'uuid';
-import { UserService } from "./auth/UserService";
-import { table } from "node:console";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { env } from '$env/dynamic/private';
+import Client from 'ssh2-sftp-client';
+import type { FileWrapper } from "$lib/uploads/upload";
+import sharp from "sharp";
+import exifReader from "exif-reader";
+// import sftp from "ssh2-sftp-client";
 
-let _s3Client: S3Client;
-
-function getS3Client() {
-    if (!_s3Client) {
-        // This log will help you verify the variables are finally loaded
-        if (dev) console.log("Initializing S3 for bucket:", env.AWS_S3_BUCKET_NAME);
-        
-        console.log("REGION: ", env.AWS_REGION)
-
-        _s3Client = new S3Client({
-            region: env.AWS_REGION || "ap-southeast-2", // Fallback just in case
-            credentials: {
-                accessKeyId: env.AWS_ACCESS_KEY_ID,
-                secretAccessKey: env.AWS_SECRET_ACCESS_KEY
-            }
-        });
-    }
-    return _s3Client;
-}
 
 export class Uploads {
 
     // #region SAVE
-    static async saveFileUpload(file: File, userId: string, name: string, description: string, source: string) {
-        const timestamp = Date.now();
-        const fileId = uuidv4().replace(/-/g, "");
-        let localResult;
+    static async saveFile(file: FileWrapper, userId: string): Promise<{registryResult: boolean, storageResult?: boolean}> {
 
-        const storageResult = await Uploads.saveFileToBucket(file, fileId, userId);
+        if(file.online) {
+            const registryResult = await Uploads.saveFileToRegistry(file, userId)    
+            return {registryResult};
+        
+        } else {
+            const storageResult = await Uploads.saveFileToStorage(file, userId);
 
-        const registryResult = await Uploads.saveFileToRegistry(timestamp, fileId, userId, name, description, source, storageResult.url);
+            if(!storageResult) return {registryResult: false, storageResult: false}
 
-        if(dev) localResult = await Uploads.saveFileToStorage(timestamp, file, fileId, userId);
+            const registryResult = await Uploads.saveFileToRegistry(file, userId);
 
-        return { storageResult, registryResult, localResult };
-    }
-
-    private static async saveFileToStorage(timestamp: number, file: File, fileId: string, userId: string) {
-
-        try{        
-            const uploadDir = path.join(process.cwd(), "static", "uploads");
-
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, { recursive: true });
-            }
-
-            // Extract safe filename based on uploaded file
-            const originalFilename = file.name;
-            const ext = path.extname(originalFilename) || "";
-            const filename = `${fileId}${ext}`;
-            const filePath = path.join(uploadDir, filename);
-
-            const buffer = Buffer.from(await file.arrayBuffer());
-            fs.writeFileSync(filePath, buffer);
-
-            if (dev) console.log("FILE STORED:", filename);
-
-            return {
-                success: true,
-                fileId,
-                filename,
-                url: `/uploads/${filename}`
-            };
-        } catch(error) {
-            Logger.warn("[FILE][STORAGE]", "Writing File to Storage failed", String(error), { fileId, filename: file.name }, { id: userId });
+            return {registryResult, storageResult}
         }
     }
 
-    private static async saveFileToRegistry(timestamp: number, fileId: string, userId: string, name: string, description: string, source: string, fileUrl: string) {
+    private static async saveFileToRegistry(file: FileWrapper, userId: string): Promise<boolean> {
         try {
+            const { file: _, blobURL: __, ...dbData } = file;
+
             const result = await SurrealDB.create({
                 table: "images",
                 data: {
-                    id: fileId,
-                    name,
-                    description,
-                    source,
-                    fileUrl,
-                    userId,
-                    created_at: new Date(timestamp).toISOString(),
+                    ...dbData,
+                    name: file.name || file.id,
                 }
             });
 
-            if (dev) console.log("REGISTRY UPDATED:", result);
+            if(!result.length) return false;
+            return true;
 
-            return {
-                success: true,
-                id: result[0].id
-            };
         } catch (error) {
-            Logger.warn("[FILE][REGISTRY]", "Writing File to Registry failed", String(error), { fileId, filename: name }, { id: userId });
-
-            return {
-                success: false,
-            };
+            Logger.warn("[FILE][REGISTRY]", "Writing File to Registry failed", String(error), { id: file.id, name: file.name }, { id: userId });
+            return false;
         }
     }
 
-    private static async saveFileToBucket(file: File, fileId: string, userId: string) {
+    private static async saveFileToStorage(file: FileWrapper, userId: string): Promise<boolean> {
+        
+        if(!file || !file.file) return false;
+
+        // Clean File
+        const buffer = Buffer.from(await file.file.arrayBuffer());
+        const image = sharp(buffer)
+        const metadata = await image.metadata();
+        file.metadata = {};
+        file.metadata.width = metadata?.width || 0;
+        file.metadata.height = metadata?.height || 0;
+
+        if(metadata.exif) {
+            try {
+                const parsedExif = exifReader(metadata.exif);
+                const make = parsedExif.Image?.Make || "";
+                const model = parsedExif.Image?.Model || "";
+                
+                file.metadata.camera = `${make} ${model}`.trim() || "";
+                file.metadata.iso = parsedExif.Photo?.ISO ? String(parsedExif.Photo.ISO) : "";
+                file.metadata.dateTaken = parsedExif.Photo?.DateTimeOriginal ? parsedExif.Photo.DateTimeOriginal.toISOString() : "";
+            } catch (error) {
+                console.warn("Could not parse EXIF buffer:", error);
+            }
+        }
+
+        // Sanitized Buffer
+        const cleanBuffer = await image.rotate().toBuffer();
+        file.size = cleanBuffer.length;
+
+        let sftp = new Client();
+
         try {
-            const ext = path.extname(file.name) || "";
-            const filename = `${fileId}${ext}`;
-            const key = `/uploads/${filename}`;
+            const uploadDir = 'uploads';
+            const ext = file.ext;
+            const filename = `${file.id}.${ext}`;
+            const remotePath = `${uploadDir}/${filename}`;
 
-            // Convert file to Buffer
-            const buffer = Buffer.from(await file.arrayBuffer());
-            const client = getS3Client();
-
-            const command = new PutObjectCommand({
-                Bucket: env.AWS_S3_BUCKET_NAME,
-                Key: key,
-                Body: buffer,
-                ContentType: file.type
+            // Connect
+            await sftp.connect({
+                host: env.HETZ_HOST,
+                username: env.HETZ_USER,
+                password: env.HETZ_PASS,
+                port: env.HETZ_PORT,
             })
 
-            await client.send(command);
+            // Ensure folder exits
+            const exists = await sftp.exists(uploadDir);
+            if (!exists) {
+                if (dev) console.log(`Creating directory: ${uploadDir}`);
+                await sftp.mkdir(uploadDir, true);
+            }
 
-            const url = `https://${env.AWS_S3_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+            // Upload
+            const result = await sftp.put(cleanBuffer, remotePath);
 
-            if(dev) console.log(`S3 UPLOAD ${filename} Successfull\nURL: ${url}\nKey: ${key}`);
+            // Verification
+            const fileStats = await sftp.stat(remotePath);
 
-            return {
-                    success: true,
-                    url: url
-                };
+            // Check if file exists and size matches
+            if (!fileStats || fileStats.size != cleanBuffer.length) {
+                throw new Error(`Upload verification failed. Server size: ${fileStats.size}, Local size: ${cleanBuffer.length}`);
+            } 
+
+            return true;
 
         } catch(error) {
-            Logger.warn("[FILE][S3_STORAGE]", "Uploads to AWS failed", String(error), { fileId }, { id: userId });
+            Logger.warn("[FILE][HETZ_STORAGE]", "Uploads to HETZNER failed", String(error), { id: file.id }, { id: userId });
+            return false;
+        }finally {
+            await sftp.end(); 
         }
     }
     // #endregion
 
+
     // #region GET
-    static async getFile(fileId?: string, fileName?: string, source?: string): Promise<any[]> {
-        const registryResult = await Uploads.getFileFromReg(fileId, fileName, source);
-        
-        if (registryResult.length === 0) return [];
-        
-        const fileResult = await Uploads.getFileFromStorage(registryResult);
-        
-        return fileResult;
-    }
-
-    private static async getFileFromReg(fileId?: string, fileName?: string, source?: string): Promise<any[]> {
-
+    static async getFileFromRegistry(fileId?: string, fileName?: string, source?: string): Promise<FileWrapper[]> {
         let result: any[] = [];
 
         if(fileId) {
-            result = await SurrealDB.select({table: "images", id: fileId});
-
+            const formatedId = fileId.startsWith("images:",) ? fileId : `images:${fileId}`
+            result = await SurrealDB.select({table: "images", id: formatedId});
         } else if(fileName) {
             result = await SurrealDB.select({table: "images", filter: { fileName }});
-
         } else if(source) {
             result = await SurrealDB.select({table: "images", search: { source }});
         } else {
             result = await SurrealDB.select({table: "images"})
         }
 
-        return result;
+        const fileWrappers: FileWrapper[] = result.map((entry) => {
+            const idString = typeof entry.id == "object" ? entry.id.id : entry.id;
 
+
+            const newWrapper: FileWrapper = {
+                id: idString,
+                name: entry.name || idString,
+                description: entry.description || "",
+                source: entry.source || "",
+                online: entry.online || "",
+                blobURL: entry.url,
+                ext: entry.ext,
+                uploadTime: entry.uploadTime,
+                size: entry.size || undefined,
+                metadata: entry.metadata,
+            }
+            return newWrapper;
+            }
+        )
+
+        fileWrappers.sort((a, b) => {
+            return a.name.localeCompare(b.name, undefined, {
+                numeric: true,      // "Image 2" comes before "Image 10"
+                sensitivity: 'base' // Ignore case (A vs a)
+            });
+        });
+
+        return fileWrappers;
     }
 
-    private static async getFileFromStorage(registry: any[]) {
+    static async getFileFromStorage(fileId: string) {
+        // Get file from DB
+        const regRestult = await Uploads.getFileFromRegistry(fileId)
 
-        let files: any[] = [];
+        if(!regRestult.length) return { success: false };
 
-        for(const entry of registry) {
-        const { fileUrl } = entry;
+        const ext = regRestult[0].ext;
+        if(!ext) return { success: false }
 
-        const fileName = fileUrl.replace(/^\//, '');
-        const filePath = path.join(process.cwd(), "static", fileName);
+        const cloudURL = `https://${env.HETZ_HOST}/uploads/${fileId}.${ext}`;
+        const auth = Buffer.from(`${env.HETZ_USER}:${env.HETZ_PASS}`).toString("base64");
 
-            try {
-                const buffer = fs.readFileSync(filePath);
-            
-                files.push({
-                    metadata: entry,
-                    buffer: buffer,
-                })
-            
-            } catch(error) {
-                if(dev) console.error(`Failed to read file ${fileName}: ${error}`);
-                files.push({
-                    metadata: entry,
-                    error: "File not found",
-                })
-            }
-        }   
-        return files;
+        const result = await fetch(cloudURL, {
+            headers: {"Authorization": `Basic ${auth}`}
+        });
+
+        if(!result.ok) return { success: false };
+
+        return { 
+            success: true, 
+            stream: result.body, 
+            contentType: result.headers.get("Content-Type") || "image/jpeg"};
+
     }
     // #endregion
+
 
     // #region DELETE
-    static async deleteFile(fileId: string) {
-        if (!fileId.startsWith("images:")) fileId = `images:${fileId}`;
+    static async deleteFile(fileId: string, forced: boolean = false) {
+        let dbResult = await this.getFileFromRegistry(fileId)
+        const registryEntry = dbResult[0]
         
-        const entry = await Uploads.getFileFromReg(fileId);
+        let registryResult;
 
-        if(!entry || entry.length == 0) {
-            return [];
-        }
+        if(!registryEntry.online) {
+            let storageResult = await this.deleteFileFromStorage(fileId);
 
-        const fileURL = entry[0].fileUrl;
-
-        const storageResult = await Uploads.deleteFileFromStorage(fileURL);
-        const registryResult = await Uploads.deleteFileFromRegistry(fileId);
-
-        if(storageResult && registryResult) return fileId;
-    }
-
-    private static async deleteFileFromRegistry(fileId: string) {
-        try {
-            await SurrealDB.delete({table: "images", id: fileId});
-            return true;
-        } catch(error) {
-            if(dev) console.error("Error deleting file from Registry", error);
-            Logger.warn("[FILE][DELET]", "Error deleting file from Registry", String(error), {fileId: fileId})
-        }
-    }
-
-    private static async deleteFileFromStorage(fileURL: string) {
-        console.log("deleteFileFromStorage: ", fileURL)
-
-        try {            
-            const fileName = fileURL.replace(/^\//, ""); 
-            const filePath = path.join(process.cwd(), "static", fileName);
-
-            if(fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            } else {
-                if(dev) console.error("File not existing on disc", fileURL);
-                return;
+            if(!storageResult.success && !forced) {
+                return { success: false, error: storageResult.error || "Storage Delete failed"};
             }
+        }
 
-            return true;
-        } catch(error) {
-            if(dev) console.error("Error deleting file from Storage", error);
-            Logger.warn("[FILE][DELET]", "Error deleting file from Storage", String(error), {fileId: fileId})
+        registryResult = await this.deleteFileFromRegistry(fileId);
+
+        if(!registryResult.success) {
+            return { success: false, error: registryResult.error || "Registry Delete failed"};
+        }
+
+        return { success: true }
+    }
+
+    static async deleteFileFromRegistry(fileId: string) {
+        try {
+            let result = await SurrealDB.delete({table: "images", id: fileId});
+            return {success: true};
+        
+        }catch(error) {
+            console.log("Registry Delete failed: ", error)
+            return {success: false, error: error}
         }
     }
+
+    static async deleteFileFromStorage(fileId: string) {
+        try {
+
+        // Get file from DB
+        const regRestult = await Uploads.getFileFromRegistry(fileId);
+
+        if(!regRestult || regRestult.length == 0) return { success: false };
+
+        const ext = regRestult[0].ext;
+        if(!ext) return { success: false }
+
+        const cloudURL = `https://${env.HETZ_HOST}/uploads/${fileId}.${ext}`;
+        const auth = Buffer.from(`${env.HETZ_USER}:${env.HETZ_PASS}`).toString("base64");
+
+        const result = await fetch(cloudURL, {
+            method: "DELETE",
+            headers: { "Authorization": `Basic ${auth}`}
+        })
+
+        if (!result.ok && result.status !== 204) {
+            console.error("Failed to delete from Cloud Storage");
+            return { success: false, error: "Storage deletion failed" };
+        }
+
+        return { success: true }
+        
+        } catch(error) {
+            console.log("Storage Delete failed", error)
+            return { success: false, error: "Storage deletion failed" }
+        }
+    };
+
 
     // #endregion
 
+
     // #region UPDATE
-    static async updateFile(fileId: string, updates: {name?: string, }) {
-        if (!fileId.startsWith("images:")) fileId = `images:${fileId}`;
-
+    static async updateFile(fileId: string, userId: string, name?: string, description?: string, source?: string) {
         try {
+            if(!fileId || (!name && !description && !source)) return;
 
-            const data: Record<string, any> = {};
+            const dbResult = await Uploads.getFileFromRegistry(fileId)
+            const regRestult = dbResult[0]
 
-            for(const [key, value] of Object.entries(updates)) {
-                if(value != undefined && value != null) {
-                    data[key] = value;
-                }
+            if(!regRestult.id) {
+                throw new Error("No Entry to update")
             }
 
-            if(Object.keys(data).length == 0) {
-                return [];
+            const updateObj = {
+                id: `images:${fileId}`,
+                name: name || "",
+                description: description || "",
+                source: source || "",
             }
 
-            const result = await SurrealDB.update({
-                table: "images",
-                id: fileId,
-                ...data
-            })
+            const result = await SurrealDB.update(updateObj, userId)
 
-            return result;
+            if(!result[0].id) return { success: false, changes: false}
+
+            const changes = (result[0].name != name || result[0].description != description || result[0].source != source)
+
+            return {
+                success: true,
+                changes: changes,
+            };
 
         }catch (error) {
-            if (dev) console.error("Error updating file in Registry", error);
-            Logger.warn("[FILE][UPDATE]", "Error updating file in Registry", String(error), { fileId });
-            return { success: false };
+            Logger.warn("[FILE][REGISTRY]", "Updating File failed", String(error), { id: fileId, name: name }, { id: userId });
+            return { success: false, changes: false };
         }
     }
-
     // #endregion
 }
 

@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { clickOutside } from "$lib/utils/util";
     import { popupStack } from "./popup";
     import { fly, fade } from "svelte/transition";
     
     // $: current = stack.at(-1);
     // $: popupStack.subscribe(v => stack = v)
     $: current = $popupStack.at(-1);
+
 
 </script>
 
@@ -44,6 +46,34 @@
                         </button>
                     </div>
 
+                {:else if current.type == "image"}
+
+                    <img 
+                        src={current.imageUrl} 
+                        alt={`${current.imageName || 'Image'}${current.imageAuthor ? ` by ${current.imageAuthor}` : ''}`}
+                        class="rounded-lg"
+                    />
+
+                    {#if current.imageName || current.imageAuthor}
+                        <div>
+                            <!-- Heading -->
+                            {#if current.imageName}
+                                <h2>{current.imageName}</h2>
+                            {:else}
+                                <h2 class="italic">Unknown Image</h2>
+                            {/if}
+
+                            <!-- Author -->
+                            {#if current.imageAuthor}
+                                <h2>By {current.imageAuthor}</h2>    
+                            {:else}
+                                <h2 class="italic">Unknown Source</h2>
+                            {/if}
+                        </div>
+                    {/if}    
+                
+
+
                 {:else if current.type == "component"}
                     <svelte:component this={current.component} {...current.props} />
                 {/if}
@@ -51,9 +81,12 @@
         </div>
     
     <!-- Modal -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     {:else if current.variant == "modal"}
-        <div class="fixed inset-0 flex items-center justify-center bg-black/50 z-50" transition:fade>
-            <div class="bg-white rounded-2xl p-6 shadow-lg w-full max-w-md" transition:fly={{ y: 20 }}>
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div class="fixed inset-0 flex items-center justify-center bg-black/50 z-50" transition:fade on:click={(() => {popupStack.close()})}>
+            <div class="bg-white rounded-2xl p-6 shadow-lg w-full max-w-[50vw] max-h-[75vh]" transition:fly={{ y: 20 }}>
                 <!-- Text Popup -->
                 {#if current.type == "text"}
 
@@ -86,10 +119,19 @@
                         </button>
                     </div>
 
+                {:else if current.type == "image"}
+                    <a href={current.imageUrl}>
+                        <img 
+                        src={current.imageUrl} 
+                        alt={`${current.imageName || 'Image'}${current.imageAuthor ? ` by ${current.imageAuthor}` : ''}`}
+                        class="rounded-lg hover:cursor-pointer"
+                        />
+                    </a>
+
                 {:else if current.type == "component"}
                     <svelte:component this={current.component} {...current.props} />
                 {/if}
             </div>
-        </div>
+        </div>        
     {/if}
 {/if}

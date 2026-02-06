@@ -13,16 +13,12 @@ export type colorVariants = "primary" | "secondary" | "tertiary" | "highlight" |
  * @returns true if the string is a valid URL, false otherwise
  */
 export function isValidUrl(str: string): boolean {
-  try {
-    new URL(str); //URL(<input>) will throw an error if input is not a string
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function mbToBytes(mb: number): number {
-    return mb * 1024 * 1024;
+    try {
+        new URL(str); //URL(<input>) will throw an error if input is not a string
+        return true;
+    } catch (_) {
+        return false;
+    }
 }
 
 export async function fileToBase64(file) {
@@ -33,8 +29,6 @@ export async function fileToBase64(file) {
         reader.readAsDataURL(file)
     })
 }
-
-
 
 /**
  * Formats a given date according to specified options.
@@ -112,6 +106,23 @@ export function formatTime(
     }
 }
 
+/**
+ * 
+ * @param bytes 
+ */
+export function formatByte(bytes: number, decimals: number = 2, append: boolean = true) {
+    if(!bytes || bytes == 0) return "0 Bytes";
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB"];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    const result = append ? parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i] : parseFloat((bytes / Math.pow(k, i)).toFixed(dm));
+ 
+    return result;
+}
 
 /**
  * Returns a given date to the day only, removing time

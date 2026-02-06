@@ -5,7 +5,8 @@ type PopupVariant = "modal" | "toast";
 
 type PopupContent = 
     | { type: "text"; title?: string; message: string; buttons?: {label: string; action: () => void }[], variant?: PopupVariant, closeText?: string } // Text Based Popup
-    | { type: "component"; component: typeof SvelteComponent; props?: Record<string, any>, variant?: PopupVariant, closeText?: string }; // Component Based Popup
+    | { type: "component"; component: typeof SvelteComponent; props?: Record<string, any>, variant?: PopupVariant, closeText?: string } // Component Based Popup
+    | { type: "image"; imageUrl: string; imageName?: string; imageAuthor?: string, variant?: PopupVariant} // Pure Image Based Popup
 
 export const popup = writable<PopupContent | null>(null);
 

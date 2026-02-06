@@ -255,17 +255,31 @@ export class SurrealDB {
         if (!db) throw new Error("SurrealDB not connected");
 
         const { id, ...data } = dbObj;
-        const query = `UPDATE type::thing($id) CONTENT $data`;
+        
+        const filteredData = Object.fromEntries(
+            Object.entries(data).filter(([_, value]) => value !== undefined)
+        );
+
+        let tableId = id;
+        let bareId = id;
+
+        if (id.includes(":")) {
+            // Split into table and bare id if needed
+            [tableId, bareId] = id.split(":");
+        }
+
+        const recordId = new RecordId(tableId, bareId);
+
+        const query = `UPDATE type::thing($recordId) MERGE $filteredData`;
 
         try {
-            const result = await db.query(query, { id, data });
+            const result = await db.query(query, { recordId, filteredData });
             const updatedObj = Array.isArray(result) ? result[0] : result;
 
             return updatedObj || [];
 
         } catch(error) {
-            Logger.warn("[DB][UPDATE]", `Failed to update object ${id}`, String(error), { id, data }, {id: userId});
-            if (dev) console.warn(`[DB][UPDATE] Failed to update object ${id} - ${error}`);
+            Logger.warn("[DB][UPDATE]", `Failed to update object ${id}`, String(error), { recordId, filteredData }, {id: String(userId)});
             return [];
         }
     }

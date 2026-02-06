@@ -3,6 +3,7 @@ import { UserService } from '$lib/utils/auth/UserService';
 import { fail, redirect } from "@sveltejs/kit"
 import { Logger } from '$lib/utils/logger';
 import { SurrealDB } from '$lib/database/newSurrealDB';
+import { Uploads } from '$lib/utils/uploads';
 
 export const load: PageServerLoad = async(event) => {
     const session = await event.locals.auth(event);
@@ -12,7 +13,7 @@ export const load: PageServerLoad = async(event) => {
         throw redirect(302, '/signin');
     }
 
-    const fileRegistry = await SurrealDB.select({table: "images"});
+    const fileRegistry = await Uploads.getFileFromRegistry();
 
     return {
         fileRegistry: JSON.parse(JSON.stringify({fileRegistry}))

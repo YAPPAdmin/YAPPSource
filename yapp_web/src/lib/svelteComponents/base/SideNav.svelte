@@ -30,7 +30,7 @@
     <!-- https://preline.co/examples/layouts-application.html -->
 {#if user instanceof User}
     <div class="">
-        <header class="sticky top-0 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-48 w-full bg-white border-b border-gray-200 text-sm py-2.5 lg:ps-65">
+        <header class="sticky top-0 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-40 w-full bg-white border-b border-gray-200 text-sm py-2.5 lg:ps-65">
             <nav class="px-4 sm:px-6 flex basis-full items-center w-full mx-auto">
             
                 <!-- Logo Sidebar Small Screen -->
@@ -99,7 +99,7 @@
         <div class="flex">
             <!-- Sidebar -->
             <div 
-                class={`fixed inset-y-0 start-0 z-60 w-64 h-full bg-white border-e border-gray-200 transform transition-transform duration-300 lg:translate-x-0 lg:static
+                class={`fixed inset-y-0 start-0 z-40 w-64 h-full bg-white border-e border-gray-200 transform transition-transform duration-300 lg:translate-x-0 lg:static
                     ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
                 aria-hidden={!sidebarOpen}
             >
@@ -221,7 +221,7 @@
     {#if sidebarOpen}
         <button
             type="button"
-            class="fixed inset-0 bg-black/40 z-50 lg:hidden appearance-none cursor-default"
+            class="fixed inset-0 bg-black/40 z-40 lg:hidden appearance-none cursor-default"
             on:click={toggleSidebar}
             aria-label="Close sidebar overlay"
             transition:fade
