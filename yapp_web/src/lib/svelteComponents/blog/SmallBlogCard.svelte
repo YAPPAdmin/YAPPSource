@@ -1,7 +1,7 @@
 <script lang="ts">
     import { API } from "$lib/utils/apiUtils";
     import { User } from "$lib/utils/auth/User";
-    import { BlogRegEntry, isBlogPostNew } from "$lib/utils/blog";
+    import { BlogRegEntry, isBlogPostNew } from "$lib/utils/blog/blog";
     import { formatDate } from "$lib/utils/util";
     import { onMount } from "svelte";
 

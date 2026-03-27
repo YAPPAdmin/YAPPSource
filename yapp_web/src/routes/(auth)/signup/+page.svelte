@@ -5,7 +5,7 @@
 	import { goto } from "$app/navigation";
 	import { popupStack } from "$lib/popups/popup";
   	import NewPassword from "$lib/svelteComponents/input/NewPassword.svelte";
-	import { validateEmail, validateUserName } from "$lib/utils/authUtils";
+	// import { validatePassword, validateEmail } from "$lib/utils/auth/authUtils"
 
 	let password: string;
 	let passwordValid: boolean;
@@ -138,7 +138,7 @@
 
 					<!-- Email Input -->
 					<div class="relative">
-						<input required bind:value={email} on:input={(() => {validEmail = validateEmail(email)})} type="email" id="email" name="email">
+						<!-- <input required bind:value={email} on:input={(() => {validEmail = validateEmail(email)})} type="email" id="email" name="email"> -->
 					</div>
 
 				</div>

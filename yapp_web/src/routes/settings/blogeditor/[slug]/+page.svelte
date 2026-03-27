@@ -1,396 +1,437 @@
 <script lang="ts">
     import { page } from "$app/state";
     import Iconify from "$lib/svelteComponents/iconify/Iconify.svelte";
-    import { onMount, tick } from "svelte";
+    import { onDestroy, onMount, tick } from "svelte";
     import { formatDate, formatTime } from "$lib/utils/util";
     import Tiptap from "$lib/svelteComponents/tiptap/Tiptap.svelte";
     import Tooltip from "$lib/svelteComponents/base/Tooltip.svelte";
-    import { BlogPostN, type BlogPostVersion } from "$lib/utils/blog";
+    import { BlogPost } from "$lib/utils/blog/blog";
+    import { BlogPostVersion, type ChangeLogEntry, type Revision, type VersionDraft } from "$lib/utils/blog/blogversion";
     import { User } from "$lib/utils/auth/User";
     import { popupStack } from "$lib/popups/popup";
-    import VersionCard from "$lib/svelteComponents/blog/VersionCard.svelte";
+    import VersionCard from "$lib/svelteComponents/blog/editor/versions/VersionCard.svelte";
+    import { fade, slide } from "svelte/transition";
+    import { newVersionStack } from "$lib/utils/blog/NewVersionStore/newVersionStore";
+    import { persistedStore } from "$lib/utils/persistedStore.ts/persistedStore";
+    import Differences from "$lib/svelteComponents/blog/editor/components/Differences.svelte";
+    import { browser } from "$app/environment";
+    import * as EditorActions from "$lib/utils/blog/editorActions"
+    import SideBar from "$lib/svelteComponents/blog/editor/editorComponents/SideBar.svelte";
+    import CurrentVersion from "$lib/svelteComponents/blog/editor/components/CurrentVersion.svelte";
+    import VersionManagement from "$lib/svelteComponents/blog/editor/components/VersionManagement.svelte";
+    import SaveActions from "$lib/svelteComponents/blog/editor/components/SaveActions.svelte";
+    import ViewerActions from "$lib/svelteComponents/blog/editor/components/ViewerActions.svelte";
+    import Metadata from "$lib/svelteComponents/blog/editor/components/Metadata.svelte";
+    import ToC from "$lib/svelteComponents/blog/editor/components/ToC.svelte";
+    import NodeEditor from "$lib/svelteComponents/blog/editor/components/NodeEditor/NodeEditor.svelte";
+    import History from "$lib/svelteComponents/blog/editor/components/History.svelte";
+    import StatusManagement from "$lib/svelteComponents/blog/editor/components/StatusManagement.svelte";
 
-    const AUTO_SAVE_DEBOUNCE = 2000; 
-    const AUTO_SAVE_MAX_INTERVAL = 10000;
+    const pageData = page.data
 
-    let autoSaveTimer: NodeJS.Timeout | null = null;
-    let autoSaveInterval: NodeJS.Timeout | null = null;
+    const TIMEOUT: number = 3000;
+    let SESSION_KEY: string = "";
 
-    let blogpost: BlogPostN | null;
-    let authorCache: any[] = [];
-	let user = page.data.session.user
+    let blogPost: BlogPost | undefined;
+	const rawUser = page.data.user
+    let user: User | undefined = rawUser ? User.fromJSON(rawUser) : undefined;
 
+    let editorInstance: any;
     let editorContent: any;
+    let error: "404" | string = "";
+
+    let saveTimeout: ReturnType<typeof setTimeout>;
+
+    let changeMessage = "";
+
+    //#region States
     let isEditing: boolean = false;
-
-
-    let selectedVersion: BlogPostVersion | undefined = undefined;
-    let editVersion: BlogPostVersion | undefined = undefined;
-
+    let isSavingDraft: boolean = false;
+    let isSavingCommit: boolean = false;
     let hasUnsavedChanges: boolean = false;
-    let currentlySendingSave: boolean = false; // UI tracker for saving status
+    //#endregion
 
-    let autosaveEnabled: boolean = true;
+    //#region UI Vars
+    const showVersionManagement = persistedStore("ui_version_mgmt_open", true);
+    const showEditorTools = persistedStore("ui_showEditorTools", true);
+    const showDescription = persistedStore("ui_showDescription", true);
+    //#endregion
 
-    async function getAuthorInfo(id: string) {
-        const fullAuthorId = id.startsWith("user:") ? id : `user:${id}`;
+    let selectedVersion: BlogPostVersion | undefined;
+    let selectedDraft: VersionDraft | undefined;
 
-        // Check if the author info is already in the cache
-        const cacheAuthor = authorCache.find((author) => author.id === fullAuthorId)
-
-        if(cacheAuthor) {
-            return cacheAuthor
-        }
-
-        console.log("Fetching author info for ID:", id);
-        const url = `/api/getUser?userRequest=author&id=${encodeURIComponent(id)}`;
-        const result = await fetch(url);
-
-        if (!result.ok) {
-            console.log("Failed fetching Author info for ID:", id);
-            const noAuthor = {
-                id: id,
-                name: "Author not found",
-                image: null,
-                email: "Email not found",
-            };
-
-            return noAuthor;
-
-        } else {
-            const data = await result.json();
-            const user = data.user;
-
-            const formatedUser = User.fromJSON(user)
-
-            authorCache.push(formatedUser); // Cache the fetched user info
-            return formatedUser;
-        }
-    }
-
-
-    function handleTipTapUpdate(event: CustomEvent) {
-        editorContent = event.detail.content;
+    onMount(async () => {
+        if (!pageData.blogPost || !user) { error = "404"; return; }
         
-        // Detect changes between editor and version
-        detectChanges();
-    }
+        $showVersionManagement = true;
 
-    onMount(() => {
-        if (!(user instanceof User)) {
-            user = User.fromJSON(user);
+        blogPost = BlogPost.fromDbRecord(pageData.blogPost);
+        if(!blogPost) { error = "404"; return; };
+
+        const sessionState = EditorActions.loadLocalSession(blogPost.id);
+
+        if(sessionState?.versionId) {
+            selectedVersion = blogPost.getVersion(sessionState.versionId) || blogPost.getVersion("latest");
+        } else {
+            selectedVersion = blogPost.getVersion(blogPost.currentVersion || "");
         }
-        // Load and generate BlogPost Object
-        blogpost = BlogPostN.fromJSON(page.data.post);
 
-        if(!blogpost) return;
-       
-        blogpost.sortVersionsNewToOld()
-
-        // Load Cache
-        authorCache = page.data.authorCache;
-
-        const activeVersion = blogpost.getActiveVersion()
-
-        if(!activeVersion) return;
-
-        loadVersion(activeVersion.id)
+        if(sessionState?.isEditing) {
+            await startEditing(true);
+        } else {
+            editorContent = selectedVersion?.versionData.content || "";
+        }
     })
 
+    onDestroy(() => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        if (browser && blogPost) {
+            EditorActions.saveLocalSession(blogPost.id, selectedVersion?.id || "", isEditing);
+        }
+    });
 
     async function loadVersion(versionId: string) {
-        // Dont switch versions while editing
-        if(isEditing) return;
+        console.log("LoadVersion\n", blogPost)
+        if(!blogPost || !user?.getId()) return;
 
-        const found = blogpost?.getVersionById(versionId);
-
-        // Reset selectedVersion
-        selectedVersion = undefined;
-        
-        // Svelte Tick to force reactivity
-        await tick();
-
-        // Set Versions
-        selectedVersion = found ? structuredClone(found) : undefined;
-        editVersion = selectedVersion ? structuredClone(selectedVersion) : undefined;
-        editorContent = selectedVersion?.content || "";
-
-        console.log("Changed to version ", selectedVersion?.versionNumber)
-    }
-
-    async function addNewVersion() {
-        isEditing = true;
-
-        const newVersion = BlogPostN.createDraftVersion(user?.id, selectedVersion, blogpost);
-
-        // Add to local state for Svelte reactivity
-        blogpost.versions = [...blogpost.versions, newVersion];
-
-        loadVersion(newVersion.id)
-        selectedVersion = newVersion;
-        editVersion = newVersion;
-        editorContent = newVersion.content;
-
-        // Save changes to backend
-        await saveChanges(newVersion);
-    }
-
-    async function deleteVersion(versionId: string) {
-        currentlySendingSave = true;
-
-        if (!blogpost || !blogpost.versions || !versionId) return;
-
-        const deleteVersion = blogpost.versions.find(version => version.id == versionId)
-
-        if(!deleteVersion) return;
-
-        try {
-            const result = await fetch("/api/blog", {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    blogPostId: blogpost.id,
-                    versionId: versionId,
-                })
-            })
-
-            const updateBody = await result.json();
-
-            if (updateBody.updatedBlog) {
-                blogpost = BlogPostN.fromJSON(updateBody.updatedBlog);
-
-                selectedVersion = undefined;
-                editVersion = undefined;
-                editorContent = undefined;
-
-                popupStack.open({
-                    type: "text",
-                    title: "Version deleted",
-                    message: `Successfully deleted Version ${deleteVersion.versionTitle} - ${deleteVersion.id}` 
-                })
-
-            }
-
-        } catch (err) {
-            console.error("Deleting Version falied: ", err);
-        } finally {
-            currentlySendingSave = false;
-        }
-
-    }
-
-    // Reactively run change detection whenever title changes 
-    $: if (isEditing && editVersion && !currentlySendingSave) {
-        detectChanges();
-    }
-
-    function normalize(obj: any): any {
-        if (Array.isArray(obj)) {
-            return obj.map(normalize);
-        } else if (obj && typeof obj === "object") {
-            return Object.keys(obj)
-            .sort()
-            .reduce((acc, key) => {
-                acc[key] = normalize(obj[key]);
-                return acc;
-            }, {} as any);
-        }
-        return obj;
-    }
-
-    // Detect if the user had made changes to the viewd version
-    function detectChanges() {
-        if (currentlySendingSave) return;
-        if (!selectedVersion || !editVersion) return;
-
-        const currentContent = JSON.stringify(normalize(editorContent));
-        const savedContent   = JSON.stringify(normalize(selectedVersion.content));
-
-        if (currentContent !== savedContent) {
-            console.log("CONTENT CHANGES")
-            hasUnsavedChanges = true;
-            scheduleAutoSave();
-            return;
-        }
-
-        // Compare Version Title
-        if (selectedVersion.versionTitle !== editVersion.versionTitle) {
-            console.log("VERSION TITLE CHANGES")
-            hasUnsavedChanges = true;
-            scheduleAutoSave();
-            return;
-        }
-
-        // Compare Version Description
-        if (selectedVersion.versionDescription !== editVersion.versionDescription) {
-            console.log("VERSION DESCRIPTION CHANGES")
-            hasUnsavedChanges = true;
-            scheduleAutoSave();
-            return;
-        }
-
-        // Compare title
-        if(selectedVersion.title !== editVersion.title) {
-            console.log("TITLE CHANGES")
-            hasUnsavedChanges = true;
-            scheduleAutoSave();
-            return;
-        }
-
-        if(selectedVersion.description !== editVersion.description) {
-            console.log("DESCRIPTION CHANGES")
-            hasUnsavedChanges = true;
-            scheduleAutoSave();
-            return;
-        }
-
-        hasUnsavedChanges = false;
-    }
-
-    function scheduleAutoSave() {
-
-        if(!autosaveEnabled) return;
-
-        console.log("SCHEDULE AUTO SAVE")
-        // Clear pause typing timer
-        if(autoSaveTimer) {
-            clearTimeout(autoSaveTimer)
-        }
-
-        // Start debounce
-        autoSaveTimer = setTimeout(() => {
-            saveChanges();
-        }, AUTO_SAVE_DEBOUNCE)
-
-        // Start interval if needed
-        if(!autoSaveInterval) {
-            autoSaveInterval = setInterval(() => {
-                saveChanges();
-            }, AUTO_SAVE_MAX_INTERVAL)
-        }
-    }
- 
-    async function saveChanges(versionToSave?: BlogPostVersion) {
-        currentlySendingSave = true;
-
-        try {
-            const version = versionToSave || editVersion;
-            if (!version) return;
-
-            // Load editor content into the version to save
-            version.content = editorContent;
-
-            // Decide whether its a new version or existing
-            const payload = version.id && blogpost.versions.some(v => v.id === version.id)
-                ? { updateVersion: version }
-                : { createVersion: version };
-
-            const result = await fetch("/api/blog", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
+        if (isEditing) {
+            popupStack.open({
+                title: "Unsaved Changes",
+                message: "Please save or cancel your current draft before loading a different version.",
+                type: "text",
+                variant: "toast"
             });
+            return;
+        }
 
-            const updateBody = await result.json();
+        // Get Version
+        const found = blogPost.getVersion(versionId);
 
-            if (updateBody.updatedBlog) {
-                blogpost = BlogPostN.fromJSON(updateBody.updatedBlog);
+        // Throw on missing blogpost version
+        if (!found) {
+            console.error("Could not find the requested version.");
+            return;
+        }
 
-                const updatedVersion = blogpost.getVersionById(version.id);
-                if (updatedVersion) {
-                    selectedVersion = structuredClone(updatedVersion);
-                    editVersion = structuredClone(updatedVersion);
-                    editorContent = updatedVersion.content;
-                }
-            } else {
-                console.error("Error setting updated blogpost");
-            }
-        } catch (err) {
-            console.error("AUTO-SAVE FAILED: ", err);
+        selectedVersion = undefined;    // Reset selectedVersion
+        await tick();                   // Svelte Tick to force reactivity
+        selectedVersion = found;        // Set Versions
+
+        editorContent = selectedVersion.versionData.content || "";
+
+        // Store editor state
+        const state: EditorActions.EditorSessionState = {
+            versionId: selectedVersion.id,
+            isEditing: false,
+        }
+        localStorage.setItem(SESSION_KEY, JSON.stringify(state))
+    }
+
+    async function startEditing(loadDraft: boolean = false) {
+        if(isEditing || !blogPost || !user || !selectedVersion) return;
+        isEditing = true;
+
+        let oldDraft: VersionDraft | undefined;
+
+        if(loadDraft) {
+            const backup = localStorage.getItem(`draft_backup_${selectedVersion.id}`);
+            if (backup) {
+                try { oldDraft = JSON.parse(backup); } catch( error) { console.error("Error loading old draft", error) }
+            } 
+        }
+
+        if(oldDraft) {
+            selectedDraft = oldDraft;
+            popupStack.open({ title: "Draft Restored", message: "Restored your existing draft.", type: "text", variant: "toast" });
+        } else {
+            selectedDraft = EditorActions.createNewDraft(blogPost.id, selectedVersion, user.getId());
+            popupStack.open({ title: "Started Editing", message: "Created a new draft.", type: "text", variant: "toast" });
+        }
+
+        editorContent = selectedDraft.versionData.content || "";
+        EditorActions.saveLocalSession(blogPost.id, selectedVersion.id, true);
+    }
+
+    function debounceSave() {
+        clearTimeout(saveTimeout);
+
+        saveTimeout = setTimeout(async () => {
+            await saveDraft();
+        }, TIMEOUT)
+    }
+
+    //#region Updates
+    function handleEditorUpdate(event: CustomEvent<{ content: any }>) {
+        editorContent = event.detail.content;
+        if(!selectedDraft || !selectedVersion || !isEditing) return;
+
+        hasUnsavedChanges = true;
+
+        // Update draft data
+        selectedDraft.versionData.content = editorContent;
+        selectedDraft.lastEdited = new Date();
+ 
+        // Update local storage
+        const localStorageKey = `draft_backup_${selectedVersion.id}`;
+        localStorage.setItem(localStorageKey, JSON.stringify(selectedDraft));
+
+        debounceSave();
+    }
+
+    function handleMetaUpdate() {
+        if(!selectedDraft || !selectedVersion || !isEditing) return;
+
+        hasUnsavedChanges = true;
+
+        // Update local storage 
+        const localStorageKey = `draft_backup_${selectedVersion.id}`;
+        localStorage.setItem(localStorageKey, JSON.stringify(selectedDraft));
+
+        debounceSave();
+    }
+
+    function handleStatusUpdate() {
+        if(!selectedDraft || !selectedVersion || !isEditing) return;
+
+        hasUnsavedChanges = true;
+
+        // Update local storage 
+        const localStorageKey = `draft_backup_${selectedVersion.id}`;
+        localStorage.setItem(localStorageKey, JSON.stringify(selectedDraft));
+
+        debounceSave();
+    }
+    //#endregion
+
+    //#region Save
+    async function saveDraft() {
+        if(!isEditing || !selectedVersion || !selectedDraft) return; 
+
+        isSavingDraft = true;
+
+        try {
+            await EditorActions.saveDraftToServer(selectedDraft)
+            hasUnsavedChanges = false;
+        } catch(error) {
+            console.error(error)
         } finally {
-            currentlySendingSave = false;
-
-            if (autoSaveInterval) {
-                clearInterval(autoSaveInterval);
-                autoSaveInterval = null;
-            }
+            isSavingDraft = false;
         }
     }
 
-    function startEditing() {
-        isEditing = true;
+    async function saveVersion(saveToNewVersion: boolean = false) {
+        if(isSavingCommit || !selectedVersion || !blogPost) return
 
-        if(!user || !user.id || !blogpost) return;
+        // Stop autosaves
+        clearTimeout(saveTimeout);
+        isSavingCommit = true;        
 
-        // Create a deep clone of selectedVersion so not to edit selectedVersion direclty
-        editVersion = JSON.parse(JSON.stringify(selectedVersion));
+        try {
+            const updatedPost = await EditorActions.commitVersion(selectedDraft, saveToNewVersion, changeMessage)
+            
+            blogPost = updatedPost;
+            selectedVersion = saveToNewVersion ? blogPost.getVersion("latest") : blogPost.getVersion(selectedVersion?.id || "")
 
-        console.log("Start Editing")
+            isEditing = false;
+            hasUnsavedChanges = false;
+            selectedDraft = undefined;
+            changeMessage = "";
+            await tick();
+
+            localStorage.removeItem(`draft_backup_${selectedVersion?.id}`);
+            if (blogPost) EditorActions.saveLocalSession(blogPost.id, selectedVersion?.id || null, false);
+            popupStack.open({ title: "Success", message: "Version Saved!", type: "text", variant: "toast" });
+
+        } catch(error) {
+            popupStack.open({ title: "Error", message: String(error), type: "text", variant: "toast" });
+        } finally {
+            isSavingCommit = false;
+        }
     }
+    //#endregion
 
-    function stopEditing() {
-        saveChanges();
+    //#region Cancel/Delete/Restore
+    function cancelChanges() {
+        if(!blogPost || !selectedVersion || !user) return;
+        if(!confirm("Are you sure you want to permanently revert the changes you made to this Version?")) return;
+        clearTimeout(saveTimeout);
+
+        selectedDraft = EditorActions.createNewDraft(blogPost.id, selectedVersion, user.getId());
+        editorContent = selectedDraft.versionData.content || "";
+
         isEditing = false;
-        editVersion = undefined;
-
-        console.log("End Editing");
+        hasUnsavedChanges = false;
+        localStorage.removeItem(`draft_backup_${selectedVersion.id}`);
+        popupStack.open({ title: "Cancelled", message: "Changes reverted.", type: "text", variant: "toast" });
     }
 
+    async function deleteVersion(version?: BlogPostVersion) {
+        if(!version) return;
+        if(!confirm("Are you sure you want to permanently delete this version?")) return;
+        
+        try {
+            await EditorActions.deleteVersionFromServer(version.id);
+            
+            if(blogPost) {
+                blogPost.deleteVersion(version.id);
+                blogPost = blogPost;
+                selectedVersion = blogPost?.getVersion("latest") ?? blogPost?.versions?.[0];
+                popupStack.open({ title: "Deleted", message: "Version removed.", type: "text", variant: "toast" });
+            }
+
+        } catch (error) {
+            popupStack.open({ title: "Error", message: String(error), type: "text", variant: "toast" });
+        }
+    }
+
+    async function handleRestoreDraft(event: CustomEvent<{ revision: Revision }>) {
+        const { revision } = event.detail;
+
+        if (!blogPost || !selectedVersion || !user) return;
+        isSavingDraft = true;
+
+        try {
+            const restoredData = await EditorActions.getRestoredVersionData(revision);
+
+            if (!isEditing || !selectedDraft) {
+                await startEditing(false);
+            }
+
+            if (!selectedDraft) throw new Error("Could not create/find draft to restore into.");
+
+            selectedDraft.versionData = restoredData.versionData;
+            selectedDraft.editorData = restoredData.editorData;
+
+            editorContent = selectedDraft.versionData.content || "";
+            isEditing = true;
+            hasUnsavedChanges = true;
+
+            const localStorageKey = `draft_backup_${selectedVersion.id}`;
+            localStorage.setItem(localStorageKey, JSON.stringify(selectedDraft));
+            await saveDraft();
+
+            debounceSave();
+
+            popupStack.open({ title: "Restored", message: "Draft reconstructed from history.", type: "text", variant: "toast" });
+
+        } catch (error) {
+            console.error("Failed to restore draft:", error);
+            popupStack.open({ title: "Error", message: "Could not restore history.", type: "text", variant: "toast" });
+        } finally {
+            isSavingDraft = false;
+        }
+    }
+    //#endregion
 </script>
 
+{#if user instanceof User && !error}
+    <div class="w-full h-[calc(100vh-10rem)]">
 
-
-{#if blogpost && user instanceof User}
-
-<div class="h-screen p-8">
-
-    <!-- Heading -->
-    <div class="w-full flex items-center justify-between space-x-3">
-        <div>
+        <!-- Heading -->
+        <div class="w-full  flex items-center justify-between space-x-3">
             <!-- Heading -->
-            {#if blogpost}
-                <div class="flex items-center">
-                    <Tooltip text={`BlogID ${blogpost.id}`}>
-                        {#if selectedVersion}
-                            <input
-                                type="text"
-                                class="!text-primary-500 !text-4xl !px-0 !mb-2 w-full bg-transparent border-none p-0 leading-tight py-1" placeholder="Blog Post Title"
-                                bind:value={selectedVersion.title}
-                            />
-                            <p>{selectedVersion.versionTitle}</p>
-                        {:else}
-                            <h1 class="!mb-2">{blogpost.title}</h1>
-                        {/if}
-                        
-                    </Tooltip>
-                    
-                </div>
+            {#if blogPost}
+                <div class="flex flex-row items-center justify-between">
+                    <div>
+                        <div class="flex items-center">
+                            <!-- Blog Title -->
+                            <h1 class="flex items-center justify-center space-x-5">
+                                {#if selectedVersion && selectedVersion.versionData && selectedVersion.versionData.title}
+                                    <div class="flex items-center justify-center space-x-5">
+                                        <div> {selectedVersion.versionData.title} </div>
 
-                <div class="flex items-center">
-                    <Iconify iconId={"material-symbols-light:calendar-clock-outline-rounded"} height={18} inline={true}/>
-                    {#if blogpost.publicDate}
-                        <p class="text-sm !text-gray-500">{formatDate(blogpost.publicDate)}</p>
-                    {/if}
+                                        <Tooltip text={"View Blog Post"}>
+                                            <a href={`/blog/${blogPost.id}`}>
+                                                <Iconify iconId={"material-symbols-light:visibility-outline-rounded"} button={true} height={24}/>
+                                            </a>
+                                        </Tooltip>
 
-                    <span class="hidden">
-                        {#await getAuthorInfo(blogpost.authorId)}
-                            <span class="animate-pulse w-full h-4 bg-gray-200 rounded-full" />
-                        {:then author}
-                            <div class="ml-2 flex items-center">
-                                <img class="shrink-0 size-4 rounded-full" src={author.image} alt={author.username}>
-                                <p>{author.username}</p>
+                                        <div class="flex items-center justify-center">
+                                            {#if selectedVersion.versionData.title != blogPost.title}
+                                                <Tooltip text={`${blogPost.title} the currently actual blogpost title`}>
+                                                    <span class="text-gray-500 text-xl">{blogPost.title}</span>
+                                                </Tooltip>      
+                                            {/if}
+                                        </div>
+                                    </div>
+                                {:else}
+                                    {blogPost.title}
+                                {/if}
+                            </h1>
+                        </div>
+
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center">
+                                <Iconify iconId={"material-symbols-light:calendar-clock-outline-rounded"} height={18} inline={true}/>
+                                {#if blogPost.creationDate}
+                                    <p class="text-sm text-gray-500!">{formatDate(blogPost.creationDate)}</p>
+                                {/if}
                             </div>
-                        {:catch error}
-                            <span>Error loading author</span>
-                        {/await}
-                    </span>
-                </div> 
 
-            
+                            <div>
+                                {#if selectedVersion && selectedVersion.versionData.description}
+                                    <button 
+                                        class="text-sm text-gray-500!" 
+                                        on:click={() => {$showDescription = !$showDescription}}
+                                    >
+                                        {$showDescription ? 'Hide Description' : 'Show Description'}
+                                    </button>
+                                {/if}
+                            </div>
+
+                        </div> 
+
+                        <!-- Description -->
+                        <div class="mt-2 flex flex-col items-start">
+                            {#if $showDescription && selectedVersion?.versionData.description}
+                                <div transition:slide={{ duration: 300 }} class="overflow-hidden">
+                                    <p class="text-sm text-gray-500!">
+                                        {selectedVersion.versionData.description}
+                                    </p>
+                                </div>
+                            {/if}
+                        </div>
+                    </div>
+
+                    <!-- Edtiting Info -->
+                    {#if isEditing}
+                        <div class="flex flex-row items-center justify-center space-x-10" in:fade={{duration: 200, delay: 200}}>
+                            <!-- Save State -->
+                            <div>
+                                {#if isSavingDraft}
+                                    <Tooltip placement="left" text={"Saving ..."}>
+                                        <Iconify iconId={"material-symbols-light:save-outline-rounded"} style={"color: yellow"}/>
+                                    </Tooltip>
+                                {:else if hasUnsavedChanges}
+                                    <Tooltip placement="left" text={"Unsaved Changes"}>
+                                        <Iconify iconId={"material-symbols-light:save-outline-rounded"} style={"color: red"}/>
+                                    </Tooltip>
+                                {:else}
+                                    <Tooltip placement="left" text={"Saved"}>
+                                        <Iconify iconId={"material-symbols-light:check-circle-outline-rounded"} style={"color: green"}/>
+                                    </Tooltip>
+                                {/if}
+                            </div>
+
+                            <!-- Viewer Information -->
+                            <div>
+                                <p class="text-xs! text-gray-500!">Currently <span>{(isEditing ? "Editing" : "Viewing")}</span></p>
+                                <p> 
+                                    <span class="text-primary-500! font-bold text-sm!">{selectedVersion.versionNumber}</span>
+                                    <span class="text-sm! text-gray-500!">-</span>  
+                                    <span class="text-primary-500! font-bold! text-sm!">{selectedVersion.EditorData.title}</span>
+                                </p>
+                                <p class="text-xs! text-gray-500!">
+                                    <span>of</span> <span class="text-primary-500! font-semibold! text-sm!">{selectedVersion.versionData.title}</span>
+                                </p>
+                            </div>
+                        </div>
+                    {/if}
+                </div>
             <!-- Heading Skeleton -->
             {:else}
                 <div class="flex items-center animate-pulse">
-                    <h1 class="!mb-2 bg-gray-200 rounded-full w-80 h-8">&nbsp;</h1>
+                    <h1 class="mb-2! bg-gray-200 rounded-full w-80 h-8">&nbsp;</h1>
                 </div>
 
                 <div class="flex items-center animate-pulse">
@@ -398,310 +439,90 @@
 
                 </div> 
             {/if}
-        </div>
-    </div>
 
-    <hr class="!border mb-8">
 
-    <!-- Grid -->
-    <div class="flex w-full space-x-2 mb-10">
-
-        <!-- BLog Editor -->
-        <div class={isEditing ? "rounded-xl h-fit flex-1 p-2.5 tape" : "rounded-xl h-fit flex-1 p-2.5"}> 
-            <Tiptap on:change={handleTipTapUpdate} content={editorContent} isEditable={isEditing}/>
         </div>
 
-        <!-- Right Side -->
-        {#if blogpost}
-            <div class="w-1/6 p-4 mr-4  space-y-4 items-center">
+        <hr class="border!">
 
-                <!-- Active Version -->
-                <div class="">
-                    {#if selectedVersion}
-                        <!-- Heading -->
-                        <div class="flex flex-row items-center">
-                            {#if isEditing} <!-- Edit  Header-->
-                                <h3>Currently <strong class="!text-warning-default">Editing</strong></h3>
-                            
-                                <!-- Start Editing Button -->
-                                <button on:click={stopEditing} class="inline-flex items-center justify-center align-middle">
-                                    <Tooltip text={"Stop editing this Version"}>
-                                        <Iconify iconId={"material-symbols-light:cancel-outline-rounded"} button={true} />
-                                    </Tooltip>
-                                </button>
-                            {:else} <!-- View Header-->
-                                <h3>Currently <strong class="!text-success-default">Viewing</strong></h3>
-                            
-                                <!-- Start Editing Button -->
-                                <button on:click={startEditing} class="inline-flex items-center justify-center align-middle">
-                                    <Tooltip text={"Start editing this Version"}>
-                                        <Iconify iconId={"material-symbols-light:edit-outline-rounded"} button={true} />
-                                    </Tooltip>
-                                </button>
-                            {/if}
-                        </div>
+        <!-- Grid -->
+        <div class="flex w-full space-x-5 h-full">
 
-                        {#if isEditing && editVersion} <!-- Edit Mode -->
-                            <!-- Version Info -->
+            <SideBar 
+                bind:isOpen={$showEditorTools}
+                position="left"
+                barName={"Editor Tools"}
+            >
 
-                            <div class="tape p-2 rounded mb-8">
-                                <div class="grow p-2 bg-gray-100 hover:bg-gray-200 rounded ">
-                                    <h3 class="flex !text-base !mt-0 gap-x-1.5 font-semibold text-gray-800 ">
-                                        <div class="flex items-center gap-x-1.5">
-                                            
-                                            <Tooltip text={`Version Number ${editVersion.versionNumber}`}>
-                                                <p class="!text-primary-500 text-sm">{editVersion.versionNumber}</p>
-                                            </Tooltip>
+                {#if isEditing}
+                    <NodeEditor editor={editorInstance}/>
 
-                                            <p class="!text-gray-500 text-sm">-</p>
+                    <SaveActions 
+                        bind:changeMessage={changeMessage}
+                        isSavingCommit={isSavingCommit}
+                        on:save={(event) => saveVersion(event.detail)}
+                        on:cancel={cancelChanges}
+                    />
 
-                                            <Tooltip text={`Updated at ${formatTime(editVersion.updatedAt)} - ${formatDate(editVersion.updatedAt)}` }>
-                                                <p class="!text-gray-500 text-sm">{formatTime(editVersion.updatedAt)}</p>
-                                            </Tooltip> 
+                    <StatusManagement 
+                        bind:selectedDraft={selectedDraft}
+                        bind:selectedVersion={selectedVersion}
+                        on:update={handleStatusUpdate}
+                    />
 
-                                            <Tooltip text={"Edit the Title of this specific version"}>
-                                                <input bind:value={editVersion.versionTitle} class="truncate block w-full rounded-lg sm:text-sm bg-transparent border-transparent focus:border-green-400 focus:ring-0 hover:border-green-300 " />
-                                            </Tooltip>
+                    <Metadata 
+                        bind:selectedDraft={selectedDraft}
+                        on:update={handleMetaUpdate}
+                    />
 
-                                            <Tooltip text="Delete this Version">
-                                                <button on:click={() => {
-                                                    popupStack.open({
-                                                        type: "text",
-                                                        title: "Delete Version",
-                                                        message: "Are you sure you want to delete this version? This action cannot be undone.",
-                                                        buttons: [{ label: "DELETE", action: () => deleteVersion(editVersion.id) }],
-                                                        variant: "modal",
-                                                        closeText: "Cancel"
-                                                    });
-                                                }}>
-                                                    <Iconify iconId="material-symbols-light:delete-outline-rounded" button={true}/>
-                                                </button>
-                                            </Tooltip>
+                {:else}
+                    <ViewerActions 
+                        selectedVersion={selectedVersion} blogPost={blogPost} user={user} 
+                        on:startEditing={() => startEditing(false)}
+                        on:deleteVersion={() => deleteVersion(selectedVersion)}
+                    />
+                {/if}
 
-                                        </div>
-                                    </h3>
+                <ToC editorContent={editorContent}/>
 
-                                    <!-- Details -->
-                                    <div class="">
-                                        <div class="max-w-sm space-y-3">
-                                            <textarea bind:value={editVersion.versionDescription} class="p-1.5 sm:py-3 sm:px-4 block w-full border-2 border-gray-300 rounded-lg sm:text-sm " rows="3" placeholder="Version Description"></textarea>
-                                        </div>
+                <Differences 
+                    selectedVersion={selectedVersion}
+                />
 
-                                        <!-- Author -->
-                                        <button type="button" class="mt-1 -ms-1 p-1 inline-flex items-center gap-x-2 text-xs rounded-lg border border-transparent text-gray-500 hover:bg-gray-100 focus:outline-hidden focus:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none ">
+                <History 
+                    selectedVersion={selectedVersion}
+                    on:restore={handleRestoreDraft}
+                />
 
-                                            {#await getAuthorInfo(editVersion.authorId)}
-                                                <span class="animate-pulse w-full h-4 bg-gray-200 rounded-full dark:bg-neutral-700" />
-                                            {:then author}
-                                            
-                                                <img class="shrink-0 size-4 rounded-full" src={author.image} alt={author.username}>
-                                                <span>{author.username}</span>
+            </SideBar>
 
-                                            {:catch error}
-                                                <span>Error loading author</span>
-                                            {/await}
-
-                                        </button>
-
-                                    </div>
-
-                                    <div class="flex items-center justify-between">
-                                        <!-- Unsaved changes -->
-                                        <div>
-
-                                            {#if currentlySendingSave} <!-- Currently Sending State -->
-                                            
-                                                <Tooltip text={"Saving changes ..."}>
-                                                    <div class="inline-flex items-center">
-                                                        <span class="size-2 inline-block bg-warning-default rounded-full me-2"></span>
-                                                        <span class="text-gray-600 ">Saving ...</span>
-                                                    </div>
-                                                </Tooltip>
-
-                                            {:else if hasUnsavedChanges} <!-- Unsaved changes State -->
-
-                                                <Tooltip text={"This draft currently has unsaved changes!"}>
-                                                    <div class="inline-flex items-center">
-                                                        <span class="size-2 inline-block bg-error-default rounded-full me-2"></span>
-                                                        <span class="text-gray-600 ">Unsaved Changes</span>
-                                                    </div>
-                                                </Tooltip>
-
-                                            {:else} <!-- No unsaved changes State -->
-
-                                                <Tooltip text={"Everythings up to date!"}>
-                                                    <div class="inline-flex items-center">
-                                                        <span class="size-2 inline-block bg-success-default rounded-full me-2"></span>
-                                                        <span class="text-gray-600 ">Saved</span>
-                                                    </div>
-                                                </Tooltip>
-
-                                            {/if}
-
-                                        </div>
-
-                                        <!-- Manual Saving -->
-                                        <div>
-                                            {#if !autosaveEnabled}
-                                                <Tooltip text={"Save"}>
-                                                    <button on:click={saveChanges}>
-                                                        <Iconify iconId={"material-symbols-light:save-outline-rounded"} button={true} />
-                                                    </button>
-                                                </Tooltip>
-                                            {/if}
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </div>
-
-
-                        
-                        {:else} <!-- Read Only Mode -->
-                            <div>
-                                <!-- Version Info -->
-                                <div class="p-2 rounded mb-8">
-                                    <div class="grow p-2 bg-gray-100 hover:bg-gray-200 rounded ">
-                                    <h3 class="flex !text-base !mt-0 gap-x-1.5 font-semibold text-gray-800 ">
-                                        <div class="flex items-center gap-x-1.5">
-                                            
-                                            <Tooltip text={`Version Number ${selectedVersion.versionNumber}`}>
-                                                <p class="!text-primary-500 text-sm">{selectedVersion.versionNumber}</p>
-                                            </Tooltip>
-
-                                            <p class="!text-gray-500 text-sm">-</p>
-
-                                            <Tooltip text={`Updated at ${formatTime(selectedVersion.updatedAt)}` }>
-                                                <p class="!text-gray-500 text-sm">{formatTime(selectedVersion.updatedAt)}</p>
-                                            </Tooltip>
-
-                                            {#if selectedVersion.versionTitle}
-                                                {selectedVersion.versionTitle}
-                                            {:else}
-                                                <span class="italic">No Version Title</span>
-                                            {/if}
-                                        </div>
-                                    </h3>
-
-                                    <!-- Details -->
-                                    <div class="pl-2">
-                                        <p class="mt-1 !text-sm text-gray-600 ">
-                                            {#if selectedVersion.versionDescription}
-                                                {selectedVersion.versionDescription}
-                                            {:else}
-                                                <span class="italic">No Version Description</span>
-                                            {/if}
-                                        </p>
-
-                                        <!-- Author -->
-                                        <button type="button" class="mt-1 -ms-1 p-1 inline-flex items-center gap-x-2 text-xs rounded-lg border border-transparent text-gray-500 hover:bg-gray-100 focus:outline-hidden focus:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none ">
-
-                                            {#await getAuthorInfo(selectedVersion.authorId)}
-                                                <span class="animate-pulse w-full h-4 bg-gray-200 rounded-full dark:bg-neutral-700" />
-                                            {:then author}
-                                            
-                                                <img class="shrink-0 size-4 rounded-full" src={author.image} alt={author.username}>
-                                                <span>{author.username}</span>
-
-                                            {:catch error}
-                                                <span>Error loading author</span>
-                                            {/await}
-
-                                        </button>
-
-                                    </div>
-                                    </div>
-                                </div>
-                    
-
-                            </div>  
-                        {/if}
+            <!-- BLog Editor -->
+            <div class="flex-1 min-w-0 flex flex-col ease-in-out overflow-y-auto scroll-p-20 overflow-x-hidden">
+                <div class={isEditing ? "rounded-xl h-fit p-2.5 tape" : "rounded-xl h-fit p-2.5"}> 
+                    {#if editorContent !== undefined}
+                        {#key selectedVersion?.id}
+                            <Tiptap 
+                                bind:editor={editorInstance}
+                                on:change={handleEditorUpdate} 
+                                content={editorContent} 
+                                isEditable={isEditing}
+                            />
+                        {/key}
+                    {:else}
+                        <div class="animate-pulse bg-gray-100 w-full h-96 rounded-xl"></div>
                     {/if}
                 </div>
-
-                <!-- History -->
-                <div>
-                    <!-- Heading -->
-                    <div class="flex flex-row items-center w-full">
-                        <h3>All Versions</h3>
-
-                        <div class="ml-auto gap-x-0.5 flex flex-row items-center">
-                            <Tooltip text={""}>
-                                <button>
-                                    <Iconify iconId={"material-symbols-light:filter-alt-outline"} button={true} />
-                                </button>
-                            </Tooltip>
-
-                            <Tooltip text={"Add new Version"}>
-                                <button on:click={addNewVersion}>
-                                    <Iconify iconId={"material-symbols-light:add-rounded"} button={true} />
-                                </button>
-                            </Tooltip>                                            
-                        </div>
-                    </div>
-
-                    <!-- Version List -->
-                    <div class="max-h-96 overflow-y-scroll">
-                        {#if blogpost.versions}
-                            {#each blogpost.groupByDate() as [date, versions]}
-                                <!-- Date Block -->
-                                <div>
-                                    <!-- Heading -->
-                                    <div class="ps-2 my-2 first:mt-0">
-                                        <h2 class="!text-xs font-medium uppercase text-gray-500 ">
-                                            {formatDate(date)}
-                                        </h2>
-                                    </div>
-
-                                    {#each versions as version (version.id)}
-
-                                        <!-- Item -->
-                                        <div class="flex gap-x-1">
-                                            <!-- Icon -->
-                                            <div class="relative last:after:hidden after:absolute after:top-7 after:bottom-0 after:start-3.5 after:w-px after:-translate-x-[0.5px] after:bg-gray-200 ">
-                                                <div class="relative z-10 size-7 flex justify-center items-center">
-                                                    {#if version.active}
-                                                        <Tooltip text={"This is the main active Version"}>
-                                                            <a href={"/"}>
-                                                                <Iconify iconId={"material-symbols-light:crown-outline-rounded"} button={true} />
-                                                            </a>
-                                                        </Tooltip>
-                                                    {:else if version.public}
-                                                        <Tooltip text={"This is an older but still public Version"}>
-                                                            <a href={"/"}>
-                                                                <Iconify iconId={"material-symbols-light:globe"} button={true} />
-                                                            </a>
-                                                        </Tooltip>
-                                                    {:else}
-                                                        <div class="size-2 rounded-full bg-gray-400 "></div>
-                                                    {/if}
-
-
-                                                </div>
-                                            </div>
-
-                                            <button on:click={() => loadVersion(version.id)}>
-                                                <VersionCard version={version}/>
-                                            </button>
-
-                                        </div>
-                                    {/each}
-                                </div>  
-                            {/each}
-                        {/if}
-                    </div>
-                </div>
             </div>
-        {/if}
 
+            <SideBar
+                bind:isOpen={$showVersionManagement}
+                position={"right"}
+                barName={"Version Management"}
+            >
+                <CurrentVersion selectedVersion={selectedVersion} />
+                <VersionManagement blogPost={blogPost} selectedVersionId={selectedVersion?.id} on:loadVersion={(event) => loadVersion(event.detail)}/>
+            </SideBar>
 
-    </div>
-</div>    
+        </div>
+    </div>    
 {/if}
-
-
-
-
-
-
-

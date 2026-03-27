@@ -1,7 +1,8 @@
 import { Layout, type LayoutSchemas, type MetaData } from "$lib/customRenderer/customRendere";
 import { LayoutService } from "$lib/customRenderer/layoutUtilsSS";
-import { UserService } from "$lib/utils/authUtilsSS";
+import { UserService } from "$lib/utils/auth/UserService";
 import { Logger } from "$lib/utils/logger";
+import { PageService } from "$lib/utils/pageEditor/PageServiceSS";
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = async (event) => {
@@ -43,23 +44,28 @@ export const POST: RequestHandler = async (event) => {
         }
 
         const body = await event.request.json();
-        const { name, type } = body;
+        const { title, description, url, titleImageId } = body;
 
-        if(!name || typeof name != "string" || !type || typeof type != "string") {
-            return new Response(JSON.stringify({error: "Missing Parameter"}), { status: 400 });
+        if (!title) {
+            return new Response(JSON.stringify({ error: "Title is required" }), { status: 400 });
         }
 
-        // Generate new Layout
-        const newLayout = Layout.generateLayout(dbUser.getId(), name, type);
+        const safeSlug = url ? url.toLowerCase().replace(/\s+/g, '-') : title.toLowerCase().replace(/\s+/g, '-');
 
-        // Save new Layout
-        const result = await LayoutService.saveLayout(newLayout, dbUser)
-        
-        if(!result) {
-            return new Response(JSON.stringify({error: "Error saving to DB"}), { status: 500 });
+        const newPage = await PageService.createPage({
+            title,
+            description: description || "",
+            slug: safeSlug,
+            titleImageId: titleImageId || "",
+            authorId: dbUser.getId()
+        });
+
+        if (!newPage) {
+            return new Response(JSON.stringify({ error: 'Database creation failed' }), { status: 500 });
         }
 
-        return new Response(JSON.stringify({message: "Successfully created new Layout", result: result}), { status: 201 });
+
+        return new Response(JSON.stringify({ success: true, page: newPage }), { status: 201 });
 
     } catch (err) {
         console.error("Error saving layout:", err);

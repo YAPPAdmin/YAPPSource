@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import sharp from "sharp";
 import exifReader from "exif-reader";
 import path from "path";
+import { Readable } from "stream";
 
 export const GET: RequestHandler = async (event) => {
     try {
@@ -15,10 +16,9 @@ export const GET: RequestHandler = async (event) => {
         const fileId = event.url.searchParams.get("fileId") || "";
         const fileName = event.url.searchParams.get("fileName") || "";
         const fileSource = event.url.searchParams.get("fileSource") || "";
+        const widthParam = event.url.searchParams.get("width") || ""
 
         let result: any;
-
-        console.log("PING GET")
 
         if(getType == "getReg") {
             result = await Uploads.getFileFromRegistry(fileId, fileName, fileSource);
@@ -36,12 +36,33 @@ export const GET: RequestHandler = async (event) => {
                 return new Response(JSON.stringify({ error: "Image not found" }), { status: 404 })
             }
 
-            console.log(`PING GET ${result.success} - ${result.stream}`)
+            let resizedStream = result.stream;
+            let resizedStreamType = result.contentType;
 
-            return new Response(result.stream, {
+            if(widthParam) {
+                const width = parseInt(widthParam)
+
+                if(!isNaN(width)) {
+
+                    let inputStream = result.stream;
+
+                    if (typeof inputStream.pipe !== 'function') {
+                        inputStream = Readable.fromWeb(inputStream);
+                    }
+
+                    const transformer = sharp()
+                        .resize({ width: width, withoutEnlargement: true })
+                        .jpeg({ quality: 90, mozjpeg: true })
+                
+                    resizedStream = inputStream.pipe(transformer);
+                    resizedStreamType = "image/jpeg"
+                }
+            }
+
+            return new Response(resizedStream, {
                 headers: {
-                    "Content-Type": result.contentType,
-                    "Cache-Control": "public, max-age=86400" // Cache 24h                   
+                    "Content-Type": resizedStreamType,
+                    "Cache-Control": "public, max-age=86400" 
                 }
             })
 

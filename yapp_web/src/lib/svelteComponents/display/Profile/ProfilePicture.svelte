@@ -2,12 +2,9 @@
     import { User } from "$lib/utils/auth/User";
     import { onMount } from "svelte";
 
-
     export let user: User;
 
-
     export let size: string = "size-10"
-
 
     onMount(() => {
         if (!(user instanceof User)) {
@@ -19,7 +16,7 @@
 
 
 <div class={size}>
-    <span class="inline-flex items-center justify-center size-10 text-sm font-semibold rounded-full border border-primary-500 text-primary-500 shadow-2xl hover:shadow-2xl">
+    <span class="w-full h-full inline-flex items-center justify-center size-10 text-sm font-semibold rounded-full border border-primary-500 text-primary-500 shadow-2xl hover:shadow-2xl">
         {#if user instanceof User}
             {#if user.getImage()}
                 <!-- User Image -->

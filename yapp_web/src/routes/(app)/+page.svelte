@@ -4,11 +4,10 @@
 	import { onMount } from "svelte";
 	import { popupStack } from "$lib/popups/popup";
 	import CustomComponentRenderer from "$lib/svelteComponents/homepage/CustomComponentRenderer.svelte";
+	import { PageLayoutVersion } from "$lib/utils/pageEditor/PageLayoutVersion";
 
-	let layout = page.data.layout;
+	$: version = page.data.version ? PageLayoutVersion.fromDbRecord(page.data.version) : undefined;
 	let user = page.data.session?.user;
-
-
 
   	onMount(() => {
 
@@ -52,6 +51,10 @@
 
 
 
-<div class="w-full h-full p-2 my-10">
-	<CustomComponentRenderer layout={layout}/>
-</div>
+{#if version}
+    <div class="w-full h-full">
+        <CustomComponentRenderer version={version} />
+    </div>
+{:else}
+    <p>Loading</p>
+{/if}

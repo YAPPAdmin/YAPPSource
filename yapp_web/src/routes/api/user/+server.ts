@@ -3,7 +3,7 @@ import { Logger } from "$lib/utils/logger";
 import { UserConfig } from "$lib/utils/auth/User";
 import { User } from "$lib/utils/auth/User";
 import { validateBirthdate, validateEmail, validateUserName } from "$lib/utils/auth/authUtils";
-import { UserService } from "$lib/utils/authUtilsSS";
+import { UserService } from "$lib/utils/auth/UserService";
 import { emailManager } from "$lib/utils/emails";
 import type { RequestHandler } from "@sveltejs/kit";
 import { hash } from 'argon2';
@@ -14,78 +14,65 @@ import { randomUUID } from "crypto";
 export const GET: RequestHandler = async (event) => {
     // Get Session
     const session = await event.locals.auth(event);
-    const dbUser = await UserService.readUser("email", session?.user?.email)
-    
-    try {    
-
-
-        if (!session?.user || !dbUser) {
-            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403 });
-        }
+    let dbUser = null;
         
-        // Get Search Parameters
-        const params = {
-            id: event.url.searchParams.get("userId") ?? "",
-            username: event.url.searchParams.get("userName") ?? "",
-            role: event.url.searchParams.get("role") ?? "",
-            phone: event.url.searchParams.get("phone") ?? "",
-            email: event.url.searchParams.get("email") ?? "",
-        }
+    if (session?.user?.email) {
+        dbUser = await UserService.readUser("email", session.user.email);
+    }
 
-        let userResult: User | User[] | undefined = undefined;
+    try {
+        const isPrivileged = dbUser?.getRole("admin") || dbUser?.getRole("moderator");
 
-        // Determine Authorization Level
-        const isPrivileged = dbUser.getRole("admin") || dbUser.getRole("moderator");
+        const targetId = event.url.searchParams.get("userId");
+        const targetUsername = event.url.searchParams.get("userName");
+        const targetRole = event.url.searchParams.get("role");
+        const targetEmail = event.url.searchParams.get("email");
 
-        // Unauthorized Users can only search for themselves
+        // Handle public request
         if(!isPrivileged) {
-            dbUser.sanitize()
-            return new Response(JSON.stringify({ user: dbUser }), { status: 200 })
-        }
 
-        const hasFilters = Object.values(params).some((Value) => Value);
-        
-        // Get all users if no filter is provided
-        if(!hasFilters) {
-            userResult = await UserService.getUser();
-        }
-
-        // Let only admins and moderators get all or specific users
-        if(params.id == null && params.username == null && params.role == null && params.phone == null && params.email == null && isPrivileged) {
-            userResult = await UserService.getUser();
-        } else {
-            const filters: string[] = [];
-
-            for(const [key, value] of Object.entries(params)) {
-                if(value) {
-                    filters.push(`${key} = "${value}"`);
+            // Self
+            if(!targetId && !targetUsername) {
+                if(dbUser) {
+                    dbUser.sanitize();
+                    return new Response(JSON.stringify({ users: [dbUser] }), { status: 200 });
                 }
             }
-            const searchConditions = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-            const query = `SELECT * FROM user ${searchConditions}`
 
-            const db = await SurrealDB.getDB();
-            const result = await db.query(query);
+            const publicAuthorData = await UserService.getAuthor(targetId);
 
-            userResult = Array.isArray(result) ? result.flat() : [];
+            if(!publicAuthorData) {
+                return new Response(JSON.stringify({ error: "User not found" }), { status: 404 }); 
+            }
+
+            return new Response(JSON.stringify({ users: [publicAuthorData] }), { status: 200 });
         }
 
-        if (!Array.isArray(userResult)) {
-            userResult = [];
-        }
+        // Handle authorized request
+        const filterParams: Record<string, string> = {};
+        if (targetUsername) filterParams.username = targetUsername;
+        if (targetRole) filterParams.role = targetRole;
+        if (targetEmail) filterParams.email = targetEmail;
 
-        // Sanitize all returned users
-        userResult = userResult.map((record) => {
-            const user = User.fromDbRecord(record);
-            user.sanitize();
-            return user;
-        });
+        const rawResults = await UserService.getUser({
+            id: targetId || undefined,
+            filter: filterParams,
+        })
 
-        if (!userResult) {
-            return new Response(JSON.stringify({ users: [] }), { status: 200 });
-        }
+        const normalizedResults = Array.isArray(rawResults) ? rawResults : (rawResults ? [rawResults] : []);
 
-        return new Response(JSON.stringify({ users: userResult}), { status: 200 })
+        const safeAdminResults = normalizedResults
+            .map((record: any) => {
+                const user = User.fromDbRecord(record);
+                if (user) {
+                    user.sanitize();
+                    return user;
+                }
+                return undefined;
+            })
+            .filter((user): user is User => user !== undefined);
+
+        return new Response(JSON.stringify({ users: safeAdminResults }), { status: 200 });
     
     } catch (error) {
         Logger.warn("[API][USER]", "Getting Users Failed", String(error), {}, {id: dbUser?.getId() || "", email: dbUser?.getEmail() || ""})

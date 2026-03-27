@@ -1,18 +1,24 @@
-import { LayoutService } from "$lib/customRenderer/layoutUtilsSS";
-import type { LayoutServerLoad } from "../$types";
+import { error } from '@sveltejs/kit';
+import { PageService } from '$lib/utils/pageEditor/PageServiceSS'; 
+import { PageLayout } from '$lib/utils/pageEditor/PageLayout';     
+import type { PageServerLoad } from './$types';
 
+export const load: PageServerLoad = async () => {
+    const pageLayout = await PageService.getPageForSlug();
 
-export const load: LayoutServerLoad = async () => {
-
-    const layout = await LayoutService.renderLayout();
-
-    if (!layout) {
-        return {
-            layout: []
-        };
+    if (!pageLayout || !pageLayout.isPublic) {
+        throw error(404, 'Page not found');
     }
 
+    const mainVersion = pageLayout.versions.find(version => version.isMainVersion == true);
+
+    if(!mainVersion) {
+        throw error(404, "Page not found")
+    }
+
+    console.log("MAIN VERSION: ", mainVersion)
+
     return {
-        layout: layout.blocks ?? []
+        version: JSON.parse(JSON.stringify(mainVersion))
     };
 };

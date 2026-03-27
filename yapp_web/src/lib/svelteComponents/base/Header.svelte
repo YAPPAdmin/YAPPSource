@@ -165,7 +165,7 @@
 </nav>
 
 <!-- Page Content Stuff? -->
-<nav class="bg-white shadow-2xl shadow-gray-200">
+<nav class="hidden bg-white shadow-2xl shadow-gray-200">
   <div class="max-w-[85rem] w-full mx-auto sm:flex sm:flex-row sm:justify-between sm:items-center sm:gap-x-3 py-3 px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center gap-x-3">
       <div class="grow">
@@ -175,14 +175,6 @@
         Overview
         <svg class="hs-dropdown-open:rotate-180 shrink-0 size-4 ms-1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </button>
-    </div>
-    <div id="hs-nav-secondary" class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow sm:block">
-      <div class="py-2 sm:py-0 flex flex-col sm:flex-row sm:justify-end gap-y-2 sm:gap-y-0 sm:gap-x-6">
-        <a class="font-medium text-sm text-primary-600 focus:outline-hidden focus:text-primary-600" href="/">Overview</a>
-        <a class="font-medium text-sm text-gray-800 hover:text-primary-600 focus:outline-hidden focus:text-primary-600" href="/">Features</a>
-        <a class="font-medium text-sm text-gray-800 hover:text-primary-600 focus:outline-hidden focus:text-primary-600" href="/">Platforms</a>
-        <a class="font-medium text-sm text-gray-800 hover:text-primary-600 focus:outline-hidden focus:text-primary-600" href="/">Pricing</a>
-      </div>
     </div>
   </div>
 </nav>

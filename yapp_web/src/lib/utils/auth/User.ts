@@ -45,9 +45,7 @@ export interface PublicInfo {
 
 export class User {
     private readonly id: string;
-    /**
-     * Private constructor – use `generateUser()` or `fromDbRecord()` instead.
-    */
+
     private constructor(
         id:string,
         private username: string,
@@ -64,8 +62,6 @@ export class User {
         private birthdate: Date | undefined = undefined,
         private pronouns: string | undefined = undefined,
         private changelog: Changelog[] = [],
-
-
     ) {
         this.id = id;
     }
@@ -230,7 +226,6 @@ export class User {
             if(this.role.includes(role)) return true;
             return false;
         }
-        
         return this.role;
     }
 
@@ -321,6 +316,19 @@ export class User {
 
     sanitize() {
         this.passwdHash = ""; // Hide Passwdhash
+    }
+
+    sanitizeAuthor() {
+        return {
+            id: this.id,
+            username: this.username,
+            firstname: this.firstname,
+            lastname: this.lastname,
+            image: this.image,
+            initials: this.initials,
+            pronouns: this.pronouns,
+            role: this.role,
+        }
     }
 
     sanitizePrivate() {

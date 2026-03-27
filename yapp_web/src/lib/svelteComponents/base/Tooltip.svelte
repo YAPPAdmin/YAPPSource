@@ -2,7 +2,7 @@
   import { fade } from "svelte/transition";
 
 
-    export let text: string;
+    export let text: string | undefined = undefined;
     export let placement: "top" | "bottom" | "left" | "right" = "bottom";
     export let hovertime: number = 1000;
     export let condition: boolean = true;
@@ -38,7 +38,7 @@
     {#if isVisible && condition}
         <div
             transition:fade={{ duration: 150 }}
-            class={`absolute w-full z-10 px-2 py-1 text-xs font-medium text-white bg-gray-900 
+            class={`absolute w-full z-51 px-2 py-1 text-xs font-medium text-white bg-gray-900 
                 rounded-md shadow-2xs whitespace-nowrap transition-opacity duration-200
                 ${placement === 'top' ? 'bottom-full left-1/2 -translate-x-1/2 mb-1' : ''}
                 ${placement === 'bottom' ? 'top-full left-1/2 -translate-x-1/2 mt-1' : ''}

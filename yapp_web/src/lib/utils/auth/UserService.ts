@@ -79,29 +79,29 @@ export class UserService {
 
         // Validate username
         if(!validateUserName(update.username)) {
-            throw error("Invalid Username");
+            throw Error("Invalid Username");
         }
 
         // Validate Firstname
         if(!validateUserName(update.firstname)) {
-            throw error("Invalid Firstname");
+            throw Error("Invalid Firstname");
         }
 
         // Validate Lastname
         if(!validateUserName(update.lastname)) {
-            throw error("Invalid Lastname");
+            throw Error("Invalid Lastname");
         }
 
         // Validate Birthdate
         if(update.Birthdate){
             if(validateBirthdate(update.birthdate)) {
-                throw error("Invalid Birthdate");
+                throw Error("Invalid Birthdate");
             }
         }
 
         // Validate Pronouns
         if(!(typeof update.pronouns === "string")) {
-            throw error("Invalid Pronouns");
+            throw Error("Invalid Pronouns");
         }
 
         // Sanitzise Update Data
@@ -198,6 +198,25 @@ export class UserService {
         return dbUser.getHash();
     }
 
+    static async getAuthor(id: string) {
+        try {
+            const user = await UserService.getUser({id: id});
+
+            if(!user) return;
+
+            const isAuthor = user.getRole("admin") || user.getRole("moderator") || user.getRole("owner");
+
+            if(!isAuthor) return;
+
+            return user.sanitizeAuthor();
+        } catch (error) {
+            Logger.warn("[UserService][getPublicAuthorCard]", `Error fetching author ${identifier}`, String(error));
+            return undefined;
+        }
+
+
+    }
+
     static toAuthUser(user:User) {
         return {
             id: user.getId(),
@@ -241,46 +260,6 @@ export class UserService {
         }
 
         return dbUser.getRole()
-    }
-
-    static async getAuthor(userId: string, blogId?: string): Promise<User | undefined> {
-        
-        if(userId == "1234567890") {
-            const testConfig: UserConfig = {
-                id: "user:1234567890",
-                username: "TestAuthor94",
-                passwdHash: "",
-                role: ["moderator"],
-                email: "test@admin.com",
-                firstname: "Teston ",
-                lastname: "Authridge",
-                image: "https://picsum.photos/600/600",
-                pronouns: "he/him",
-                
-            }
-            const testAuthor = User.generateUser(testConfig)
-            return testAuthor;
-        }
-
-        // Get User
-        const dbUser = await this.readUser("id", userId);
-
-        // Error on empty user
-        if(!dbUser) return undefined;
-
-        // Error on user that cant be an author
-        if(!dbUser.getRole("admin") && !dbUser.getRole("moderator")) return undefined;
-        
-        // Format to User obj
-        let formatedUser = User.fromDbRecord(dbUser);
-        
-        // Sanitize
-        formatedUser.sanitize()
-
-        // Filter private info
-        formatedUser.sanitizePrivate();
-
-        return formatedUser;
     }
 }
 

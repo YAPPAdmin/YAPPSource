@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { UserService } from '$lib/utils/auth/UserService';
+import { UserService } from "$lib/utils/auth/UserService";
 import { redirect } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async(events) => {

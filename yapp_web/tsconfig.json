@@ -11,7 +11,7 @@
 		"strict": true,
 		"moduleResolution": "bundler"
 	},
-	"include": ["src", "../TRASHCAN/surrealdb.ts"],
+	"include": ["src", "../TRASHCAN/surrealdb.ts", "../timeout"],
 	"exclude": ["node_modules/",  "**/*.test.ts"]
 }
 	// Path aliases are handled by https://kit.svelte.dev/docs/configuration#alias

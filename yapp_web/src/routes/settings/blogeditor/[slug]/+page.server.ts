@@ -1,8 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from "@sveltejs/kit";
 import { SurrealDB } from "$lib/database/surrealdb"
-import { BlogPostN } from "$lib/utils/blog";
-import { BlogService } from '$lib/utils/blogUtilsSS';
+import { BlogPost } from "$lib/utils/blog/blog";
+import { BlogService } from '$lib/utils/blog/blogUtilsSS';
 import { UserService } from '$lib/utils/auth/UserService';
 import { User, UserConfig } from '$lib/utils/auth/User';
 
@@ -16,45 +16,11 @@ export const load: PageServerLoad = async(event) => {
     }
 
     // Fetch BlogPost
-    let post: BlogPostN = await BlogService.readBlogPost(slug)
-
-    // cache for author information
-    let authorCache: any[] = [];
-
-    for(const version of post.versions) {
-        const authorId = version.authorId;
-        const fullAuthorId = authorId.startsWith("user:") ? authorId : `user:${authorId}`;
-
-
-        // Try finding author data in cache
-	    const cacheAuthor = authorCache.find((author) => author.id === fullAuthorId);
-
-        // Append missing Author to cache
-        if(!cacheAuthor) {
-
-            // const dbAuthor = await SurrealDB.selectByProperty("user", "id", `user:${authorId}`);
-            const dbAuthor = await UserService.getAuthor(authorId)
-
-            if(dbAuthor) {
-                authorCache.push(dbAuthor)
-            } else {
-                const missingAuthorConfig: UserConfig = {
-                    id: authorId,
-                    username: "Unknown Author",
-                    passwdHash: "",
-                } 
-
-                const missingAuthor = User.generateUser(missingAuthorConfig);
-                authorCache.push(missingAuthor);
-            }
-            
-        }
-    }
+    let blogPost: BlogPost[] = await BlogService.readBlogPost(slug)
 
     return { 
         slug,
         user: JSON.parse(JSON.stringify(user)),
-        post: JSON.parse(JSON.stringify(post)),
-        authorCache: JSON.parse(JSON.stringify(authorCache)),
+        blogPost: JSON.parse(JSON.stringify(blogPost[0])),
     };
 }

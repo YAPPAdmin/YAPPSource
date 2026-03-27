@@ -203,7 +203,7 @@ input{
     inline-flex justify-center items-center gap-x-2 
     text-gray-800 text-sm font-medium 
     rounded-lg border border-gray-200 
-    bg-white
+    bg-white shadow
     hover:bg-background-800 
     focus:outline-hidden focus:bg-background-900
     disabled:opacity-50
@@ -218,11 +218,26 @@ input[type="date"] {
     inline-flex justify-center items-center gap-x-2 
     text-gray-800 text-sm font-medium 
     rounded-lg border border-gray-200 
-    bg-white shadow-lg
+    bg-white shadow
     focus:outline-hidden focus:bg-background-900
     disabled:opacity-50
     transition-all duration-300
     ;
+}
+
+textarea{
+    @apply
+    w-full
+    py-3 px-4
+    inline-flex justify-center items-center gap-x-2 
+    text-gray-800 text-sm font-medium
+    rounded-lg border border-gray-200
+    bg-white shadow
+    focus:outline-hidden focus:bg-background-900
+    disabled:opacity-50
+    transition-all duration-300
+    ;
+
 }
 
 select{
@@ -360,4 +375,37 @@ button {
     hover:cursor-pointer
     disabled:cursor-not-allowed disabled:opacity-50
     ;
+}
+
+
+
+
+.tiptap img {
+    @apply 
+    max-w-full h-auto rounded-lg 
+    bg-secondary-500
+
+    ;
+}
+
+.tiptap [style*="float: left"] {
+    @apply mr-6 mb-4 mt-2;
+}
+
+.tiptap [style*="float: right"] {
+    @apply ml-6 mb-4 mt-2;
+}
+
+.tiptap img:not([style*="float"]):not([style*="float"]) {
+    @apply block mx-auto my-6;
+}
+
+.tiptap img.ProseMirror-selectednode {
+    @apply outline-3 outline-primary-500;
+}
+
+/* Keyframes stay as standard CSS so the animate class above can find them */
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }

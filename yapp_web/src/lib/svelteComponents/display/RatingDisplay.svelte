@@ -18,23 +18,23 @@
 
 <!-- https://preline.co/docs/ratings.html -->
 <!-- Rating -->
-<div class="flex items-center space-x-0">
+<div class="flex items-center justify-center">
 	{#each stars as star}
 		<!-- Full Star -->
 		{#if star === 'full'}
-            <span class="w-5">
+            <span class="w-4.5">
                 <Iconify iconId={"material-symbols-light:star-rate-rounded"} style={"color: orange"} height={36}/>
             </span>
 
 		<!-- Half Star (optional, use full icon for now) -->
 		{:else if star === 'half'}
-            <span class="w-5">
+            <span class="w-4.5">
                 <Iconify iconId={"material-symbols-light:star-rate-half-rounded"} style={"color: orange"} height={36}/>  
             </span>
 
 		<!-- Empty Star -->
 		{:else}
-            <span class="w-5">
+            <span class="w-4.5">
                 <Iconify iconId={"material-symbols-light:star-rate-outline-rounded"} style={"color: orange"} height={36}/>  
             </span>
 		{/if}

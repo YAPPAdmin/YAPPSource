@@ -1,12 +1,8 @@
-+import { SurrealDB } from "$lib/database/surrealdb";
 import { Logger } from "$lib/utils/logger";
-import { User, validateBirthdate, validateEmail, validateUserName, type UserConfig } from "$lib/utils/auth/User";
-import { UserService } from "$lib/utils/authUtilsSS";
+import { UserService } from "$lib/utils/auth/UserService";
 import { emailManager } from "$lib/utils/emails";
 import type { RequestHandler } from "@sveltejs/kit";
-import { hash } from 'argon2';
-import { randomUUID } from "crypto";
-import { UpdateToken } from "../../../../auth";
+import { UpdateToken } from "$lib/utils/auth/authUtilsSS";
 
 
 export const GET: RequestHandler = async (event) => {
@@ -29,7 +25,7 @@ export const GET: RequestHandler = async (event) => {
 
         Logger.info("[USER][EMAILVERIFICATION]", "", {}, {id: dbUser.getId(), email: dbUser.getEmail()});
 
-    }catch (error) {*/-
+    }catch (error) {
         Logger.warn("[API][USER]", "Getting Users Failed", String(error), {}, {id: dbUser?.getId() || "", email: dbUser?.getEmail() || ""})
         return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
     }

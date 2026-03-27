@@ -171,7 +171,7 @@
                         class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gray-50"
                     >
                         <div class="w-full h-full animate-pulse bg-gray-200"></div>
-                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skeleton-shimmer"></div>
+                        <div class="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent skeleton-shimmer"></div>
                     </div>
                 {/if}
 
@@ -193,7 +193,7 @@
                         <img
                             src={imageSource}
                             alt={file.description}
-                            class="w-full h-full object-cover  transition-opacity duration-500 {isLoaded ? 'opacity-100' : 'opacity-0'}"
+                            class="w-full h-full object-cover transition-opacity duration-500 {isLoaded ? 'opacity-100' : 'opacity-0'}"
                             loading="lazy"
                             on:load={() => isLoaded = true}
                             on:error={() => { hasError = true; isLoaded = true; }}

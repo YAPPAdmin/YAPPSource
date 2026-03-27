@@ -80,8 +80,22 @@ export class SurrealDB {
     /**
      * Select Function
      * @param options tabel, id, filter, search, pagination limit, pagination start, order
+     * @param options.table The table name to query
+     * @param options.id Specific record ID (overrides filters)
+     * @param options.filter Key-value pairs for exact matching (=)
+     * @param options.search Key-value pairs for partial matching (CONTAINS)
+     * @param options.limit Number of records to return
+     * @param options.start Pagination offset
+     * @param options.orderBy Sort string ("timestamp DESC")
      * @param userId (optional) ID of performing user
      * @returns Array of matching rows, even if empty
+     * @example
+     * const result = await SurrealDBNEW.select({ 
+            table: "blog", 
+            id: id,
+            filter: { ...(category && { category }) , ... },
+            search: { ...(title && { title }), ... }, 
+        });
      */
     static async select(options: {table: string; id?: string; filter?: Record<string, any>; search?: Record<string, any>; limit?: number; start?: number; orderBy?: string;}, userId?: string): Promise<any[]> {
         const {
@@ -98,16 +112,16 @@ export class SurrealDB {
         if (!db) throw new Error("SurrealDB not connected");
 
         let query = "";
+        const vars: Record<string, any> = {};
 
         try {
 
             // Select by id
             if (id) {
-                let tableId = id;
+                let tableId = table;
                 let bareId = id;
 
                 if (id.includes(":")) {
-                    // Split into table and bare id if needed
                     [tableId, bareId] = id.split(":");
                 }
 
@@ -119,18 +133,26 @@ export class SurrealDB {
             }
 
             // Filter Parts
-            const filterParts = Object.entries(filter).map(([key, value]) =>
-                typeof value === "string"
-                    ? `${key} = "${value}"`
-                    : `${key} = ${value}`
-            );
+            const filterParts = Object.entries(filter).map(([key, value], i) => {
+                const varName = `f_${i}`;
+                vars[varName] = value;
+
+                // Handle Arrays
+                if (Array.isArray(value)) {
+                    return `${key} IN $${varName}`;
+                }
+
+                // Standard exact match
+                return `${key} = $${varName}`;
+            });
 
             // Search Parts
-            const searchParts = Object.entries(search).map(([key, value]) => 
-                typeof value == "string"
-                    ? `${key} CONTAINS "${value}"`
-                    : `${key} CONTAINS ${value}`
-            )
+            const searchParts = Object.entries(search).map(([key, value], i) => {
+                const varName = `s_${i}`;
+                vars[varName] = value;
+
+                return `${key} CONTAINS $${varName}`
+            })
 
             let whereClause = "";
 
@@ -157,7 +179,7 @@ export class SurrealDB {
             `.trim()
 
             // Execure SELECT
-            const result = await db?.query(query);
+            const result = await db?.query(query, vars);
             const data = Array.isArray(result) ? result[0] : result;
 
             return Array.isArray(data) ? data: [data];

@@ -29,8 +29,8 @@
 
     <!-- https://preline.co/examples/layouts-application.html -->
 {#if user instanceof User}
-    <div class="">
-        <header class="sticky top-0 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-40 w-full bg-white border-b border-gray-200 text-sm py-2.5 lg:ps-65">
+    <div class="w-full h-full">
+        <header class="sticky top-0 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-30 w-full bg-white border-b border-gray-200 text-sm py-2.5 lg:ps-65">
             <nav class="px-4 sm:px-6 flex basis-full items-center w-full mx-auto">
             
                 <!-- Logo Sidebar Small Screen -->
@@ -96,14 +96,13 @@
             </div>
         </div>
 
-        <div class="flex">
+        <div class="flex w-full h-full">
             <!-- Sidebar -->
             <div 
-                class={`fixed inset-y-0 start-0 z-40 w-64 h-full bg-white border-e border-gray-200 transform transition-transform duration-300 lg:translate-x-0 lg:static
+                class={`fixed inset-y-0 start-0 z-30 w-64 h-full bg-white border-e border-gray-200 transform transition-transform duration-300 lg:translate-x-0 lg:static
                     ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
                 aria-hidden={!sidebarOpen}
             >
-
 
                 <div class="relative flex flex-col h-full max-h-full">
                 
@@ -189,19 +188,8 @@
                                         <Iconify iconId={"material-symbols-light:docs-outline-rounded"}/>
                                         Documentation
                                     </a>
-                                </li>
-
-                                <!-- Test -->
-                                {#if dev}
-                                    <li>
-                                        <a class="DEVbutton w-full flex items-center gap-x-3.5 py-2 px-2.5 text-sm text-gray-800 rounded-lg hover:bg-gray-100 focus:outline-hidden focus:bg-gray-100" href="/settings/test">
-                                            Test
-                                        </a>
-                                    </li>
-                                {/if}
-                                
+                                </li>                                
                             </ul>
-
                         </nav>
                     </div>
                     <!-- End Content -->
@@ -221,7 +209,7 @@
     {#if sidebarOpen}
         <button
             type="button"
-            class="fixed inset-0 bg-black/40 z-40 lg:hidden appearance-none cursor-default"
+            class="fixed inset-0 bg-black/40 z-30 lg:hidden appearance-none cursor-default"
             on:click={toggleSidebar}
             aria-label="Close sidebar overlay"
             transition:fade

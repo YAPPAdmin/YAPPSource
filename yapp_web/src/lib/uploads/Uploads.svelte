@@ -224,7 +224,7 @@
 
 </script>
 
-{#if current}
+{#if current }
     <div class="fixed inset-0 flex items-center justify-center bg-black/50 z-40" transition:fade>
         <div class=" w-1/2 h-2/3 items-center space-y-5 bg-white rounded-2xl p-6 shadow-lg" transition:fly={{ y: 20 }}>
 
@@ -276,7 +276,7 @@
                                 <div class="relative m-5 max-w-full max-h-full h-fit flex items-center justify-center">
                                     <!-- Remove Button -->
                                     <button
-                                        class="absolute top-0 right-0 z-50 p-1 shadow-lg hover:bg-white bg-white/90 text-gray-500 hover:text-red-500 rounded-full shadow-sm hover:shadow-md transition-all translate-x-2 -translate-y-2"
+                                        class="absolute top-0 right-0 z-50 p-1 shadow-lg hover:bg-white bg-white/90 text-gray-500 hover:text-red-500 rounded-full hover:shadow-md transition-all translate-x-2 -translate-y-2"
                                         on:click|stopPropagation={() => removeFile(previewIndex)}
                                         title="Remove this image"
                                     >

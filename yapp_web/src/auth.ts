@@ -212,5 +212,7 @@ export const { handle } = SvelteKitAuth({
         verifyRequest: "/signup/verifySend"
     },
 
+    trustHost: true,
+
 })
 
